@@ -401,8 +401,20 @@ go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 golangci-lint run
 ```
 
-config อยู่ที่ `.golangci.yml` (schema v2) — `errorlint` เปิดไว้เพราะโปรเจกต์นี้พึ่ง
-`errors.Is` กับ domain error ถ้าใครเผลอเขียน `err == apperr.ErrNotFound` จะโดนจับ
+config อยู่ที่ `.golangci.yml` (schema v2) เปิดไว้ประมาณ 25 ตัว ที่ตั้งใจเป็นพิเศษ:
+
+- **`depguard`** — เอากฎ layer ที่เขียนไว้ข้างบนมาให้เครื่องบังคับแทนความจำคน
+  `internal/service` / `handler` / `dto` **ห้าม import gorm**, และ `service` / `repository` /
+  `auth` / `apperr` / `logging` / `model` **ห้าม import echo**
+  ผิดเมื่อไหร่ lint แดงทันที ไม่ต้องรอ reviewer มาจับ
+- `errorlint` — โปรเจกต์นี้พึ่ง `errors.Is` กับ domain error ใครเผลอเขียน
+  `err == apperr.ErrNotFound` จะโดนจับ
+- `gosec`, `nilerr`, `noctx`, `contextcheck`, `sqlclosecheck`, `rowserrcheck`
+- `cyclop` / `gocognit` / `funlen` / `lll` คุมไม่ให้ function บวมเงียบๆ
+
+ที่จงใจ**ปิด**: `govet.shadow` (`if err := f(); err != nil` เป็น idiom ปกติของ Go
+ดัดให้เลิก shadow แล้วโค้ดแย่ลง) และ `govet.fieldalignment` (เรียง field ตามความหมาย
+อ่านง่ายกว่าประหยัด byte) ส่วน `docs/` ข้ามทั้งโฟลเดอร์เพราะ swag gen ให้
 
 ## CI
 

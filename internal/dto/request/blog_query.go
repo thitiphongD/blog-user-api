@@ -1,6 +1,7 @@
 package request
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ func (q *BlogQuery) Normalize() error {
 	if q.UserID != "" {
 		id, err := uuid.Parse(q.UserID)
 		if err != nil {
-			return fmt.Errorf("user_id must be a valid UUID")
+			return errors.New("user_id must be a valid UUID")
 		}
 		q.userID = &id
 	}

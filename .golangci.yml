@@ -6,32 +6,124 @@ run:
 linters:
   default: standard
   enable:
+    # ถูก/ผิด
     - bodyclose
+    - contextcheck
     - errorlint # เจอ err == target ที่ควรเป็น errors.Is — สำคัญกับ domain error ของโปรเจกต์นี้
+    - gosec
+    - nilerr # return nil ทั้งที่ err != nil
+    - nilnil
+    - noctx # เจอ HTTP/DB call ที่ลืมส่ง context
+    - rowserrcheck
+    - sqlclosecheck
+
+    # โครงสร้าง / กฎของโปรเจกต์
+    - depguard # บังคับกฎ layer ให้เครื่องเช็คได้ ไม่ใช่แค่เขียนไว้ใน README
+    - cyclop
+    - funlen
+    - gocognit
+
+    # ความสะอาด
     - goconst
     - gocritic
+    - lll
     - misspell
-    - noctx # เจอ HTTP/DB call ที่ลืมส่ง context
+    - nakedret
+    - nolintlint
+    - perfsprint
+    - prealloc
     - revive
-    - sqlclosecheck
     - unconvert
+    - unparam
+    - usestdlibvars
     - whitespace
 
   settings:
+    depguard:
+      rules:
+        # service คือหัวใจของ layering — หลุด gorm เข้าไปเมื่อไหร่ interface ที่ประกาศไว้
+        # ก็ไร้ความหมาย เพราะ mock จะต้อง import gorm ตาม
+        no-gorm-above-repository:
+          list-mode: lax
+          files:
+            - "**/internal/service/**"
+            - "**/internal/handler/**"
+            - "**/internal/dto/**"
+          deny:
+            - pkg: gorm.io/gorm
+              desc: gorm อยู่ได้แค่ใน repository/database/model — ชั้นบนคุยผ่าน interface เท่านั้น
+            - pkg: gorm.io/driver/postgres
+              desc: driver ไม่ควรโผล่นอก database
+
+        # package พวกนี้ต้อง test ได้โดยไม่ต้องมี HTTP และเอาไปใช้ซ้ำที่อื่นได้
+        no-echo-below-handler:
+          list-mode: lax
+          files:
+            - "**/internal/service/**"
+            - "**/internal/repository/**"
+            - "**/internal/auth/**"
+            - "**/internal/apperr/**"
+            - "**/internal/logging/**"
+            - "**/internal/model/**"
+          deny:
+            - pkg: github.com/labstack/echo
+              desc: ชั้นล่าง handler ห้ามรู้จัก echo
+
+    errcheck:
+      check-type-assertions: true
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # จัดเรียง field ตามความหมาย อ่านง่ายกว่าประหยัด byte
+        - shadow # `if err := f(); err != nil` เป็น idiom ปกติของ Go ดัดให้เลิก shadow แล้วโค้ดแย่ลง
+
     revive:
       rules:
         - name: exported
           disabled: true # ไม่บังคับ doc comment ทุก exported symbol
+        - name: early-return
+        - name: indent-error-flow
+        - name: unnecessary-stmt
+        - name: redefines-builtin-id
+        - name: context-as-argument
+        - name: errorf
+
     goconst:
       min-occurrences: 4
 
+    cyclop:
+      max-complexity: 12
+
+    gocognit:
+      min-complexity: 20
+
+    funlen:
+      lines: 80
+      statements: 50
+
+    lll:
+      line-length: 120
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
   exclusions:
+    # swag gen ให้ แต่หัวไฟล์ไม่ตรงรูปแบบ "Code generated ... DO NOT EDIT." เป๊ะ
+    # golangci เลยไม่ข้ามให้เอง ต้องบอกตรงนี้
+    paths:
+      - docs
+
     rules:
-      # เทสต์เขียนซ้ำๆ ได้ ไม่ต้องบังคับ dedupe
+      # เทสต์เขียนซ้ำๆ ได้ ยาวได้ และเรียก error ทิ้งได้
       - path: _test\.go
         linters:
-          - goconst
           - dupl
+          - funlen
+          - goconst
+          - gosec
+          - lll
 
 formatters:
   enable:

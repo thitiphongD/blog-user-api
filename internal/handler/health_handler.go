@@ -1,17 +1,24 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/labstack/echo/v4"
-	"gorm.io/gorm"
 
 	"github.com/thitiphongD/blog-user-api/internal/response"
 )
 
-type HealthHandler struct {
-	db *gorm.DB
+// Pinger คือสิ่งที่ health ต้องการจริงๆ — แค่ ping ได้ ไม่ต้องรู้ว่าข้างล่างเป็น gorm หรืออะไร
+// (*sql.DB ใส่ได้ตรงๆ และ mock ในเทสต์ก็เขียนไม่กี่บรรทัด)
+type Pinger interface {
+	PingContext(ctx context.Context) error
 }
 
-func NewHealthHandler(db *gorm.DB) *HealthHandler {
+type HealthHandler struct {
+	db Pinger
+}
+
+func NewHealthHandler(db Pinger) *HealthHandler {
 	return &HealthHandler{db: db}
 }
 
@@ -25,12 +32,7 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
 //	@Failure	500	{object}	response.Body
 //	@Router		/health [get]
 func (h *HealthHandler) Health(c echo.Context) error {
-	sqlDB, err := h.db.DB()
-	if err != nil {
-		return response.InternalServerError(c)
-	}
-
-	if err := sqlDB.PingContext(c.Request().Context()); err != nil {
+	if err := h.db.PingContext(c.Request().Context()); err != nil {
 		return response.InternalServerError(c)
 	}
 

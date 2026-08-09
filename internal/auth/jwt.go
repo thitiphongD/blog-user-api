@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,7 +60,7 @@ func (j *JWT) Verify(token string) (uuid.UUID, error) {
 	}
 
 	if !parsed.Valid || claims.UserID == uuid.Nil {
-		return uuid.Nil, fmt.Errorf("invalid token")
+		return uuid.Nil, errors.New("invalid token")
 	}
 
 	return claims.UserID, nil

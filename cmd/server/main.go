@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -62,12 +63,18 @@ func run() error {
 		return err
 	}
 
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get sql.DB: %w", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+
 	if err := migrate.Up(cfg.DB.URL()); err != nil {
 		return err
 	}
 	slog.Info("migration up to date")
 
-	e := newEcho(cfg, db)
+	e := newEcho(cfg, db, sqlDB)
 
 	go func() {
 		if err := e.Start(":" + cfg.App.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -87,16 +94,12 @@ func run() error {
 		return err
 	}
 
-	if sqlDB, err := db.DB(); err == nil {
-		_ = sqlDB.Close()
-	}
-
 	slog.Info("bye")
 
 	return nil
 }
 
-func newEcho(cfg *config.Config, db *gorm.DB) *echo.Echo {
+func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -124,7 +127,7 @@ func newEcho(cfg *config.Config, db *gorm.DB) *echo.Echo {
 
 	routes.Register(e, routes.Deps{
 		JWT:    jwt,
-		Health: handler.NewHealthHandler(db),
+		Health: handler.NewHealthHandler(pinger),
 		Auth:   handler.NewAuthHandler(service.NewAuthService(userRepo, jwt)),
 		User:   handler.NewUserHandler(service.NewUserService(userRepo)),
 		Blog:   handler.NewBlogHandler(service.NewBlogService(blogRepo, tx)),

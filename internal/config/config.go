@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -78,7 +79,7 @@ func Load() (*Config, error) {
 	}
 
 	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("JWT_SECRET is required")
+		return nil, errors.New("JWT_SECRET is required")
 	}
 
 	return cfg, nil
