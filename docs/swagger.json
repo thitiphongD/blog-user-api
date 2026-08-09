@@ -602,6 +602,278 @@
                 }
             }
         },
+        "/api/v1/blogs/{id}/comments": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "summary": "list comment ของ blog",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "blog id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "หน้า เริ่มที่ 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "ต่อหน้า สูงสุด 100",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "id ไม่ใช่ UUID",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "ไม่มี blog นี้",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "summary": "สร้าง comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "blog id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "เนื้อหาคอมเมนต์",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.CreateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "ไม่มี blog นี้",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/comments/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "summary": "แก้ comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "เนื้อหาใหม่",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "ไม่ใช่เจ้าของ",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comment"
+                ],
+                "summary": "ลบ comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "comment id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "ไม่ใช่เจ้าของ",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users": {
             "get": {
                 "security": [
@@ -771,6 +1043,19 @@
                 }
             }
         },
+        "github_com_thitiphongD_blog-user-api_internal_dto_request.CreateCommentRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 1
+                }
+            }
+        },
         "github_com_thitiphongD_blog-user-api_internal_dto_request.LoginRequest": {
             "type": "object",
             "required": [
@@ -842,6 +1127,19 @@
                 }
             }
         },
+        "github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateCommentRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 1
+                }
+            }
+        },
         "github_com_thitiphongD_blog-user-api_internal_dto_response.AuthResponse": {
             "type": "object",
             "properties": {
@@ -889,6 +1187,29 @@
                     "type": "string"
                 },
                 "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.AuthorResponse"
+                },
+                "blog_id": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "updated_at": {

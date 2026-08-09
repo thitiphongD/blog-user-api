@@ -13,6 +13,15 @@ definitions:
     - content
     - title
     type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_request.CreateCommentRequest:
+    properties:
+      content:
+        maxLength: 2000
+        minLength: 1
+        type: string
+    required:
+    - content
+    type: object
   github_com_thitiphongD_blog-user-api_internal_dto_request.LoginRequest:
     properties:
       email:
@@ -66,6 +75,15 @@ definitions:
     - content
     - title
     type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateCommentRequest:
+    properties:
+      content:
+        maxLength: 2000
+        minLength: 1
+        type: string
+    required:
+    - content
+    type: object
   github_com_thitiphongD_blog-user-api_internal_dto_response.AuthResponse:
     properties:
       expired_at:
@@ -97,6 +115,21 @@ definitions:
       id:
         type: string
       title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse:
+    properties:
+      author:
+        $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.AuthorResponse'
+      blog_id:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
         type: string
       updated_at:
         type: string
@@ -510,6 +543,173 @@ paths:
       summary: แก้ blog
       tags:
       - blog
+  /api/v1/blogs/{id}/comments:
+    get:
+      parameters:
+      - description: blog id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 1
+        description: หน้า เริ่มที่ 1
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: ต่อหน้า สูงสุด 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse'
+                  type: array
+              type: object
+        "400":
+          description: id ไม่ใช่ UUID
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: ไม่มี blog นี้
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: list comment ของ blog
+      tags:
+      - comment
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: blog id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: เนื้อหาคอมเมนต์
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.CreateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: ไม่มี blog นี้
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: สร้าง comment
+      tags:
+      - comment
+  /api/v1/comments/{id}:
+    delete:
+      parameters:
+      - description: comment id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "403":
+          description: ไม่ใช่เจ้าของ
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: ลบ comment
+      tags:
+      - comment
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: comment id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: เนื้อหาใหม่
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.CommentResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "403":
+          description: ไม่ใช่เจ้าของ
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: แก้ comment
+      tags:
+      - comment
   /api/v1/users:
     get:
       parameters:

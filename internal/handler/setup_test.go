@@ -25,11 +25,12 @@ import (
 // ได้ของแถมคือเทสต์วิ่งผ่าน route + validator + global error handler ของจริง
 // การ map error เป็น status เลยถูกเช็คไปด้วย ไม่ใช่เช็คแค่ค่าที่ handler return
 type app struct {
-	echo    *echo.Echo
-	users   *fakeUserRepo
-	blogs   *fakeBlogRepo
-	refresh *fakeRefreshRepo
-	jwt     *auth.JWT
+	echo     *echo.Echo
+	users    *fakeUserRepo
+	blogs    *fakeBlogRepo
+	comments *fakeCommentRepo
+	refresh  *fakeRefreshRepo
+	jwt      *auth.JWT
 }
 
 func newApp(t *testing.T) *app {
@@ -38,6 +39,7 @@ func newApp(t *testing.T) *app {
 	users := &fakeUserRepo{}
 	blogs := &fakeBlogRepo{}
 	refresh := &fakeRefreshRepo{}
+	comments := &fakeCommentRepo{}
 	jwt := auth.NewJWT("test-secret", time.Hour)
 
 	e := echo.New()
@@ -52,11 +54,12 @@ func newApp(t *testing.T) *app {
 		Auth: handler.NewAuthHandler(
 			service.NewAuthService(users, refresh, passthroughTx{}, jwt, 7*24*time.Hour),
 		),
-		User: handler.NewUserHandler(service.NewUserService(users)),
-		Blog: handler.NewBlogHandler(service.NewBlogService(blogs, passthroughTx{})),
+		User:    handler.NewUserHandler(service.NewUserService(users)),
+		Blog:    handler.NewBlogHandler(service.NewBlogService(blogs, passthroughTx{})),
+		Comment: handler.NewCommentHandler(service.NewCommentService(comments, blogs, passthroughTx{})),
 	})
 
-	return &app{echo: e, users: users, blogs: blogs, refresh: refresh, jwt: jwt}
+	return &app{echo: e, users: users, blogs: blogs, comments: comments, refresh: refresh, jwt: jwt}
 }
 
 // do ยิง request จริงเข้า echo — token ว่างแปลว่าไม่แนบ Authorization
@@ -226,6 +229,43 @@ func (m *fakeRefreshRepo) RevokeAllForUser(_ context.Context, userID uuid.UUID, 
 	}
 
 	return nil
+}
+
+type fakeCommentRepo struct {
+	findByID      func(ctx context.Context, id uuid.UUID) (*model.Comment, error)
+	findAllByBlog func(ctx context.Context, blogID uuid.UUID, offset, limit int) ([]model.Comment, error)
+	countByBlog   func(ctx context.Context, blogID uuid.UUID) (int64, error)
+	create        func(ctx context.Context, comment *model.Comment) error
+	update        func(ctx context.Context, comment *model.Comment) error
+	delete        func(ctx context.Context, id uuid.UUID) error
+}
+
+func (m *fakeCommentRepo) FindByID(ctx context.Context, id uuid.UUID) (*model.Comment, error) {
+	return m.findByID(ctx, id)
+}
+
+func (m *fakeCommentRepo) FindAllByBlog(
+	ctx context.Context,
+	blogID uuid.UUID,
+	offset, limit int,
+) ([]model.Comment, error) {
+	return m.findAllByBlog(ctx, blogID, offset, limit)
+}
+
+func (m *fakeCommentRepo) CountByBlog(ctx context.Context, blogID uuid.UUID) (int64, error) {
+	return m.countByBlog(ctx, blogID)
+}
+
+func (m *fakeCommentRepo) Create(ctx context.Context, comment *model.Comment) error {
+	return m.create(ctx, comment)
+}
+
+func (m *fakeCommentRepo) Update(ctx context.Context, comment *model.Comment) error {
+	return m.update(ctx, comment)
+}
+
+func (m *fakeCommentRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	return m.delete(ctx, id)
 }
 
 // passthroughTx รัน fn ตรงๆ — transaction จริงถูกเทสต์ที่ชั้น service แล้ว

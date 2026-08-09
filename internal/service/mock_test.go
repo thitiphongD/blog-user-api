@@ -146,6 +146,67 @@ func (m *mockRefreshRepo) RevokeAllForUser(ctx context.Context, userID uuid.UUID
 	return m.revokeAllForUser(ctx, userID, at)
 }
 
+type mockCommentRepo struct {
+	findByID      func(ctx context.Context, id uuid.UUID) (*model.Comment, error)
+	findAllByBlog func(ctx context.Context, blogID uuid.UUID, offset, limit int) ([]model.Comment, error)
+	countByBlog   func(ctx context.Context, blogID uuid.UUID) (int64, error)
+	create        func(ctx context.Context, comment *model.Comment) error
+	update        func(ctx context.Context, comment *model.Comment) error
+	delete        func(ctx context.Context, id uuid.UUID) error
+}
+
+func (m *mockCommentRepo) FindByID(ctx context.Context, id uuid.UUID) (*model.Comment, error) {
+	if m.findByID == nil {
+		panic("unexpected call: FindByID")
+	}
+
+	return m.findByID(ctx, id)
+}
+
+func (m *mockCommentRepo) FindAllByBlog(
+	ctx context.Context,
+	blogID uuid.UUID,
+	offset, limit int,
+) ([]model.Comment, error) {
+	if m.findAllByBlog == nil {
+		panic("unexpected call: FindAllByBlog")
+	}
+
+	return m.findAllByBlog(ctx, blogID, offset, limit)
+}
+
+func (m *mockCommentRepo) CountByBlog(ctx context.Context, blogID uuid.UUID) (int64, error) {
+	if m.countByBlog == nil {
+		panic("unexpected call: CountByBlog")
+	}
+
+	return m.countByBlog(ctx, blogID)
+}
+
+func (m *mockCommentRepo) Create(ctx context.Context, comment *model.Comment) error {
+	if m.create == nil {
+		panic("unexpected call: Create")
+	}
+
+	return m.create(ctx, comment)
+}
+
+func (m *mockCommentRepo) Update(ctx context.Context, comment *model.Comment) error {
+	if m.update == nil {
+		panic("unexpected call: Update")
+	}
+
+	return m.update(ctx, comment)
+}
+
+func (m *mockCommentRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	if m.delete == nil {
+		panic("unexpected call: Delete")
+	}
+
+	return m.delete(ctx, id)
+}
+
 // fakeTx รัน fn ตรงๆ ไม่มี transaction จริง — service แค่ต้องเรียกให้ถูก
 type fakeTx struct {
 	called bool

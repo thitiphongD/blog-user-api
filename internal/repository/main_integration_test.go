@@ -57,7 +57,7 @@ func TestMain(m *testing.M) {
 func reset(t *testing.T) {
 	t.Helper()
 
-	if err := testDB.Exec("TRUNCATE refresh_tokens, blogs, users RESTART IDENTITY CASCADE").Error; err != nil {
+	if err := testDB.Exec("TRUNCATE comments, refresh_tokens, blogs, users RESTART IDENTITY CASCADE").Error; err != nil {
 		t.Fatalf("ล้างตาราง: %v", err)
 	}
 }

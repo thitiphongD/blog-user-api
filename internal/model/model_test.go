@@ -113,3 +113,22 @@ func TestRefreshTokenUsable(t *testing.T) {
 		})
 	}
 }
+
+func TestCommentBeforeCreateFillsID(t *testing.T) {
+	comment := &model.Comment{Content: "x"}
+	if err := comment.BeforeCreate(nil); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	if comment.ID == uuid.Nil {
+		t.Fatal("ไม่ได้ id")
+	}
+
+	fixed := uuid.New()
+	kept := &model.Comment{ID: fixed}
+	if err := kept.BeforeCreate(nil); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	if kept.ID != fixed {
+		t.Fatal("id ที่ตั้งมาเองถูกทับ")
+	}
+}

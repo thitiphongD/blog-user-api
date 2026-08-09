@@ -124,6 +124,7 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 	userRepo := repository.NewUserRepository(db)
 	blogRepo := repository.NewBlogRepository(db)
 	refreshRepo := repository.NewRefreshTokenRepository(db)
+	commentRepo := repository.NewCommentRepository(db)
 	tx := repository.NewTxManager(db)
 
 	authService := service.NewAuthService(userRepo, refreshRepo, tx, jwt, cfg.JWT.RefreshTTL)
@@ -135,6 +136,7 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 		Auth:                   handler.NewAuthHandler(authService),
 		User:                   handler.NewUserHandler(service.NewUserService(userRepo)),
 		Blog:                   handler.NewBlogHandler(service.NewBlogService(blogRepo, tx)),
+		Comment:                handler.NewCommentHandler(service.NewCommentService(commentRepo, blogRepo, tx)),
 	})
 
 	return e

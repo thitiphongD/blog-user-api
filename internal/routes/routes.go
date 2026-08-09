@@ -18,6 +18,7 @@ type Deps struct {
 	Auth                   *handler.AuthHandler
 	User                   *handler.UserHandler
 	Blog                   *handler.BlogHandler
+	Comment                *handler.CommentHandler
 }
 
 func Register(e *echo.Echo, d Deps) {
@@ -52,4 +53,13 @@ func Register(e *echo.Echo, d Deps) {
 	blogs.POST("", d.Blog.Create, protected)
 	blogs.PUT("/:id", d.Blog.Update, protected)
 	blogs.DELETE("/:id", d.Blog.Delete, protected)
+
+	// comment ผูกกับ blog เสมอ ตอนอ่าน/สร้างเลยซ้อนใต้ /blogs/:id
+	// ส่วนตอนแก้/ลบอ้างถึงตัว comment ตรงๆ ไม่ต้องรู้ว่ามันอยู่ใต้ blog ไหน
+	blogs.GET("/:id/comments", d.Comment.List)
+	blogs.POST("/:id/comments", d.Comment.Create, protected)
+
+	comments := v1.Group("/comments", protected)
+	comments.PUT("/:id", d.Comment.Update)
+	comments.DELETE("/:id", d.Comment.Delete)
 }

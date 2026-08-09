@@ -57,7 +57,7 @@ internal/
   apperr/                   domain error (ErrNotFound, ErrEmailTaken, ...)
   migrate/                  รัน migration ตอน start
     migrations/             ไฟล์ SQL — source of truth ของ schema
-  handler/                  auth / blog / user / health
+  handler/                  auth / blog / comment / user / health
   service/                  business logic
   repository/               คุย DB (ตั้งชื่อตาม entity: user, blog)
   dto/request/              payload ขาเข้า
@@ -274,6 +274,25 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 `/blogs` เป็น public แต่ `/users` ปิด → `author` ใน `BlogResponse` มีแค่ `id` กับ `name`
 **ไม่มี email** ไม่งั้นปิดประตูหน้าแล้วเปิดประตูหลัง
 
+### Comment
+
+| Method | Path | คำอธิบาย |
+|---|---|---|
+| GET | `/blogs/:id/comments` | list comment ของ blog — public, เรียงเก่าไปใหม่ |
+| POST | `/blogs/:id/comments` * | เขียนคอมเมนต์ |
+| PUT | `/comments/:id` * | แก้ — **เจ้าของคอมเมนต์เท่านั้น** |
+| DELETE | `/comments/:id` * | ลบ (soft delete) — **เจ้าของคอมเมนต์เท่านั้น** |
+
+อ่าน/สร้างซ้อนใต้ `/blogs/:id` เพราะคอมเมนต์ไม่มีความหมายถ้าไม่มีโพสต์
+ส่วนแก้/ลบอ้างถึงตัวคอมเมนต์ตรงๆ ไม่ต้องรู้ว่ามันอยู่ใต้ blog ไหน
+
+เรียง**เก่าไปใหม่** ต่างจาก blog ที่เรียงใหม่ไปเก่า — บทสนทนาต้องอ่านไล่จากบนลงล่าง
+
+**blog ที่ถูกลบไปแล้ว คอมเมนต์ไม่ได้และอ่านคอมเมนต์ไม่ได้ (404)** — FK กันได้แค่ตอนลบถาวร
+แต่ blog เป็น soft delete แถวยังอยู่ FK เลยไม่ช่วย ต้องเช็คเองที่ service
+
+**เจ้าของ blog ลบคอมเมนต์คนอื่นไม่ได้** — เป็นเรื่อง moderation ซึ่งจงใจไม่ทำ ไม่ใช่ลืม
+
 ### Query params ของ `GET /blogs`
 
 | param | default | หมายเหตุ |
@@ -422,7 +441,7 @@ make test-integration  # ยิง postgres จริง (ยก container ใ�
 | ชั้น | coverage |
 |---|---|
 | `config` / `dto/request` / `logging` / `middleware` / `model` / `response` / `validator` | 100% |
-| `handler` | 96.6% |
+| `handler` | 95.8% |
 | `service` | 95.9% |
 | `auth` | 92.9% |
 

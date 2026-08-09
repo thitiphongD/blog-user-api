@@ -28,6 +28,15 @@ type RefreshTokenRepository interface {
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error
 }
 
+type CommentRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*model.Comment, error)
+	FindAllByBlog(ctx context.Context, blogID uuid.UUID, offset, limit int) ([]model.Comment, error)
+	CountByBlog(ctx context.Context, blogID uuid.UUID) (int64, error)
+	Create(ctx context.Context, comment *model.Comment) error
+	Update(ctx context.Context, comment *model.Comment) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
 type BlogRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*model.Blog, error)
 	FindAll(ctx context.Context, f model.BlogFilter) ([]model.Blog, error)
