@@ -390,11 +390,14 @@ make test-integration  # ยิง postgres จริง (ยก container ใ�
 |---|---|
 | `config` / `dto/request` / `logging` / `model` | 100% |
 | `service` | 97.4% |
+| `handler` | 96.0% |
 | `middleware` | 94.6% |
 | `auth` | 89.3% |
 | `validator` | 81.2% |
 | `response` | 81.0% |
-| `handler` | 70.7% |
+
+ที่เหลือใน `handler` คือ branch ของ `middleware.UserID` ซึ่งวิ่งไม่ถึงผ่าน route จริง
+(มันพังได้ต่อเมื่อมีคนลืมใส่ JWT middleware ให้ route นั้น) — เก็บไว้เป็นกันชน ไม่ไล่ทดสอบ
 
 `repository` ไม่มี unit test เพราะ mock พิสูจน์ SQL แทนไม่ได้ — ดูหัวข้อ integration test ข้างล่าง
 

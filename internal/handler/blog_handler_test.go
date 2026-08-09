@@ -292,3 +292,116 @@ func TestUnexpectedRepositoryErrorBecomes500(t *testing.T) {
 		t.Fatalf("error จริงหลุดออก response: %s", rec.Body.String())
 	}
 }
+
+func TestBlogWriteEndpointsRejectBadInput(t *testing.T) {
+	cases := []struct {
+		name    string
+		method  string
+		target  string
+		body    string
+		status  int
+		message string
+	}{
+		{"create body พัง", http.MethodPost, "/api/v1/blogs", `{oops`, http.StatusBadRequest, "Invalid request body"},
+		{
+			"update id ไม่ใช่ UUID", http.MethodPut, "/api/v1/blogs/not-a-uuid",
+			`{"title":"x","content":"y"}`, http.StatusBadRequest, "Invalid blog id",
+		},
+		{
+			"update body พัง", http.MethodPut, "/api/v1/blogs/" + uuid.New().String(),
+			`{oops`, http.StatusBadRequest, "Invalid request body",
+		},
+		{
+			"delete id ไม่ใช่ UUID", http.MethodDelete, "/api/v1/blogs/not-a-uuid",
+			"", http.StatusBadRequest, "Invalid blog id",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newApp(t)
+			// ไม่เซ็ต mock ไว้เลย ถ้าหลุดไปถึง repository จะ panic
+			rec := app.do(t, tc.method, tc.target, tc.body, app.tokenFor(t, uuid.New()))
+
+			body := assertStatus(t, rec, tc.status)
+			if body["message"] != tc.message {
+				t.Fatalf("message = %v อยากได้ %q", body["message"], tc.message)
+			}
+		})
+	}
+}
+
+// page ที่ไม่ใช่ตัวเลข = bind ไม่ผ่าน = 400
+func TestListBlogsRejectsNonNumericPage(t *testing.T) {
+	app := newApp(t)
+
+	rec := app.do(t, http.MethodGet, "/api/v1/blogs?page=abc", "", "")
+
+	body := assertStatus(t, rec, http.StatusBadRequest)
+	if body["message"] != "Invalid query parameter" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}
+
+func TestUpdateAndDeleteRequireToken(t *testing.T) {
+	app := newApp(t)
+	id := uuid.New().String()
+
+	rec := app.do(t, http.MethodPut, "/api/v1/blogs/"+id, `{"title":"x","content":"y"}`, "")
+	assertStatus(t, rec, http.StatusUnauthorized)
+
+	rec = app.do(t, http.MethodDelete, "/api/v1/blogs/"+id, "", "")
+	assertStatus(t, rec, http.StatusUnauthorized)
+}
+
+func TestGetBlogRepositoryError(t *testing.T) {
+	app := newApp(t)
+	app.blogs.findByID = func(context.Context, uuid.UUID) (*model.Blog, error) { return nil, errBoom }
+
+	rec := app.do(t, http.MethodGet, "/api/v1/blogs/"+uuid.New().String(), "", "")
+
+	assertStatus(t, rec, http.StatusInternalServerError)
+	if strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("error จริงหลุดออก response: %s", rec.Body.String())
+	}
+}
+
+func TestCreateBlogRepositoryError(t *testing.T) {
+	app := newApp(t)
+	app.blogs.create = func(context.Context, *model.Blog) error { return errBoom }
+
+	rec := app.do(t, http.MethodPost, "/api/v1/blogs", `{"title":"Hello","content":"x"}`,
+		app.tokenFor(t, uuid.New()))
+
+	assertStatus(t, rec, http.StatusInternalServerError)
+	if strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("error จริงหลุดออก response: %s", rec.Body.String())
+	}
+}
+
+func TestGetBlogSuccess(t *testing.T) {
+	app := newApp(t)
+	id := uuid.New()
+	owner := uuid.New()
+
+	app.blogs.findByID = func(_ context.Context, got uuid.UUID) (*model.Blog, error) {
+		return sampleBlog(got, owner), nil
+	}
+
+	rec := app.do(t, http.MethodGet, "/api/v1/blogs/"+id.String(), "", "")
+
+	body := assertStatus(t, rec, http.StatusOK)
+	data := dataOf(t, body)
+
+	if data["id"] != id.String() || data["title"] != "Hello" {
+		t.Fatalf("data = %v", data)
+	}
+
+	author, ok := data["author"].(map[string]any)
+	if !ok || author["name"] != "Daew" {
+		t.Fatalf("author = %v", data["author"])
+	}
+	if _, leaked := author["email"]; leaked {
+		t.Fatal("email ของ author หลุดออกทาง /blogs/:id ที่เป็น public ด้วย")
+	}
+}

@@ -204,3 +204,42 @@ func TestMeRejectsTokenSignedWithOtherSecret(t *testing.T) {
 
 	assertStatus(t, rec, http.StatusUnauthorized)
 }
+
+func TestLoginBrokenJSON(t *testing.T) {
+	app := newApp(t)
+
+	rec := app.do(t, http.MethodPost, "/api/v1/auth/login", `{oops`, "")
+
+	body := assertStatus(t, rec, http.StatusBadRequest)
+	if body["message"] != "Invalid request body" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}
+
+// token ยังใช้ได้แต่ user ถูกลบไปแล้ว — ต้องเป็น 404 ไม่ใช่ 500
+func TestMeWhenUserGone(t *testing.T) {
+	app := newApp(t)
+	app.users.findByID = func(context.Context, uuid.UUID) (*model.User, error) {
+		return nil, apperr.NotFound("User")
+	}
+
+	rec := app.do(t, http.MethodGet, "/api/v1/auth/me", "", app.tokenFor(t, uuid.New()))
+
+	body := assertStatus(t, rec, http.StatusNotFound)
+	if body["message"] != "User not found" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}
+
+func TestLoginValidationFails(t *testing.T) {
+	app := newApp(t)
+
+	rec := app.do(t, http.MethodPost, "/api/v1/auth/login", `{"email":"ไม่ใช่อีเมล","password":""}`, "")
+
+	body := assertStatus(t, rec, http.StatusUnprocessableEntity)
+
+	errs, ok := body["errors"].(map[string]any)
+	if !ok || errs["email"] == nil || errs["password"] == nil {
+		t.Fatalf("errors = %v", body["errors"])
+	}
+}
