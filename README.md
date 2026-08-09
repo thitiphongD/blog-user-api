@@ -394,9 +394,24 @@ Service layer ทดสอบด้วย mock repository เขียนมื�
 ownership ของ update/delete, transaction ของ create, pagination clamp, sort/order whitelist,
 การคำนวณ `total_page`
 
-`health` มีเทสต์แยกที่ยิงผ่าน `httptest` จริง คุมสามอย่าง: ตอบ 200 พร้อม envelope ครบ,
-**ping DB จริงด้วย context ของ request** (ไม่ใช่ตอบ 200 ลอยๆ ไม่งั้น docker healthcheck
-ก็ไร้ความหมาย) และตอน DB ล่มต้องเป็น 500 ที่**ไม่คาย error จริงออก response**
+### เทสต์ฝั่ง HTTP
+
+`internal/handler` ยิง request จริงผ่าน `httptest` เข้า echo ที่ประกอบ route + validator +
+global error handler ของจริง — mock ลงไปถึงชั้น repository เลย เพราะ handler ผูกกับ service
+struct ตรงๆ ผลพลอยได้คือ **การ map error เป็น status ถูกเช็คไปด้วย** ไม่ใช่เช็คแค่ค่าที่
+handler return
+
+ที่คุมไว้ 32 เคส เช่น:
+
+- `author` ใน `/blogs` (public) **ต้องไม่มี email** — กันรั่วออกทางหลังตอน `/users` ปิดอยู่
+- เจ้าของโพสต์มาจาก **token** ไม่ใช่ `user_id` ที่ client ยัดมาใน body
+- ไม่ใช่เจ้าของ = **403 ไม่ใช่ 404** และ `repository.Update`/`Delete` ต้องไม่ถูกเรียกเลย
+- `limit=999999` ถูก clamp ตั้งแต่ก่อนถึง repository
+- 400 (JSON พัง / id ไม่ใช่ UUID / sort นอก whitelist) แยกจาก 422 (validate ไม่ผ่าน) ชัดเจน
+- token ที่เซ็นด้วย secret อื่นใช้ไม่ได้
+- password เกิน 72 bytes โดนปฏิเสธ ไม่ใช่ปล่อยให้ bcrypt ตัดเงียบๆ
+- error ที่ไม่ได้ตั้งใจ → 500 ที่ไม่คายรายละเอียดออก response
+- `health` ping DB จริงด้วย context ของ request ไม่ใช่ตอบ 200 ลอยๆ
 
 ## Lint
 
