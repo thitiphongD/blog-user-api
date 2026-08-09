@@ -49,10 +49,9 @@ func (j *JWT) Generate(userID uuid.UUID) (string, time.Time, error) {
 func (j *JWT) Verify(token string) (uuid.UUID, error) {
 	claims := &Claims{}
 
-	parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
+	// WithValidMethods ตัด token ที่ alg ไม่ใช่ HS256 ทิ้งตั้งแต่ก่อนเรียก keyfunc
+	// (เช็คซ้ำใน keyfunc อีกรอบคือโค้ดที่ไม่มีวันวิ่งถึง)
+	parsed, err := jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
 		return j.secret, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {

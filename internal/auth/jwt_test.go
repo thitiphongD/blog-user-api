@@ -80,16 +80,21 @@ func TestVerifyRejects(t *testing.T) {
 	}
 }
 
-// alg: none คือท่าคลาสสิกของการปลอม JWT — ถ้า WithValidMethods หลุดเมื่อไหร่ เทสต์นี้จะจับได้
-func TestVerifyRejectsAlgNone(t *testing.T) {
-	header := b64(t, `{"alg":"none","typ":"JWT"}`)
-	payload := b64(t, `{"user_id":"`+uuid.New().String()+`","exp":`+
-		strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10)+`}`)
+// alg ที่ไม่ใช่ HS256 ต้องถูกตัดทิ้งหมด — alg:none คือท่าปลอม JWT คลาสสิก
+// ส่วน RS256 คือท่า algorithm confusion (หลอกให้เอา public key ไปใช้เป็น HMAC secret)
+func TestVerifyRejectsOtherAlgorithms(t *testing.T) {
+	for _, alg := range []string{"none", "RS256", "HS512"} {
+		t.Run("alg: "+alg, func(t *testing.T) {
+			header := b64(t, `{"alg":"`+alg+`","typ":"JWT"}`)
+			payload := b64(t, `{"user_id":"`+uuid.New().String()+`","exp":`+
+				strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10)+`}`)
 
-	forged := header + "." + payload + "."
+			forged := header + "." + payload + "."
 
-	if _, err := auth.NewJWT(secret, time.Hour).Verify(forged); err == nil {
-		t.Fatal("รับ token ที่ alg เป็น none — ใครก็ปลอมได้")
+			if _, err := auth.NewJWT(secret, time.Hour).Verify(forged); err == nil {
+				t.Fatalf("รับ token ที่ alg เป็น %s — ใครก็ปลอมได้", alg)
+			}
+		})
 	}
 }
 
