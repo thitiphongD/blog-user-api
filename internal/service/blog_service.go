@@ -12,19 +12,22 @@ import (
 
 type BlogService struct {
 	blogs BlogRepository
+	tx    Transactor
 }
 
-func NewBlogService(blogs BlogRepository) *BlogService {
-	return &BlogService{blogs: blogs}
+func NewBlogService(blogs BlogRepository, tx Transactor) *BlogService {
+	return &BlogService{blogs: blogs, tx: tx}
 }
 
-func (s *BlogService) GetBlogs(ctx context.Context, q request.ListQuery) ([]model.Blog, int64, error) {
-	total, err := s.blogs.Count(ctx)
+func (s *BlogService) GetBlogs(ctx context.Context, q request.BlogQuery) ([]model.Blog, int64, error) {
+	f := q.Filter()
+
+	total, err := s.blogs.Count(ctx, f)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	blogs, err := s.blogs.FindAll(ctx, q.Offset(), q.Limit)
+	blogs, err := s.blogs.FindAll(ctx, f)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -47,12 +50,29 @@ func (s *BlogService) CreateBlog(
 		UserID:  userID,
 	}
 
-	if err := s.blogs.Create(ctx, blog); err != nil {
+	var created *model.Blog
+
+	// เขียนแล้วอ่านกลับ (เพื่อเอา author มาด้วย) เป็นสองคำสั่ง มัดไว้ใน transaction เดียว
+	// จะได้ไม่มีจังหวะที่อ่านเจอสถานะครึ่งๆ กลางๆ
+	err := s.tx.Do(ctx, func(ctx context.Context) error {
+		if err := s.blogs.Create(ctx, blog); err != nil {
+			return err
+		}
+
+		found, err := s.blogs.FindByID(ctx, blog.ID)
+		if err != nil {
+			return err
+		}
+
+		created = found
+
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	// อ่านกลับมาเพื่อให้ได้ author ติดมาด้วย response จะได้ครบเหมือน endpoint อื่น
-	return s.blogs.FindByID(ctx, blog.ID)
+	return created, nil
 }
 
 func (s *BlogService) UpdateBlog(
@@ -72,11 +92,27 @@ func (s *BlogService) UpdateBlog(
 	blog.Title = req.Title
 	blog.Content = req.Content
 
-	if err := s.blogs.Update(ctx, blog); err != nil {
+	var updated *model.Blog
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		if err := s.blogs.Update(ctx, blog); err != nil {
+			return err
+		}
+
+		found, err := s.blogs.FindByID(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		updated = found
+
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	return s.blogs.FindByID(ctx, id)
+	return updated, nil
 }
 
 func (s *BlogService) DeleteBlog(ctx context.Context, userID, id uuid.UUID) error {

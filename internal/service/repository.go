@@ -22,9 +22,14 @@ type UserRepository interface {
 
 type BlogRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*model.Blog, error)
-	FindAll(ctx context.Context, offset, limit int) ([]model.Blog, error)
-	Count(ctx context.Context) (int64, error)
+	FindAll(ctx context.Context, f model.BlogFilter) ([]model.Blog, error)
+	Count(ctx context.Context, f model.BlogFilter) (int64, error)
 	Create(ctx context.Context, blog *model.Blog) error
 	Update(ctx context.Context, blog *model.Blog) error
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// Transactor รัน fn ทั้งก้อนใน transaction เดียว — service สั่งได้โดยไม่ต้องรู้จัก *gorm.DB
+type Transactor interface {
+	Do(ctx context.Context, fn func(ctx context.Context) error) error
 }

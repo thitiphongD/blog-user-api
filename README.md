@@ -226,14 +226,16 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 |---|---|---|
 | `page` | 1 | ต่ำสุด 1 |
 | `limit` | 20 | **max 100** เกินจะถูก clamp |
-| `search` | - | ค้นจาก title/content — *P2* |
-| `sort` | `created_at` | whitelist: `created_at`, `title` — *P2* |
-| `order` | `desc` | `asc` / `desc` — *P2* |
-| `user_id` | - | กรองตามผู้เขียน — *P2* |
+| `search` | - | ค้นจาก title/content (ILIKE ไม่สนตัวพิมพ์) |
+| `sort` | `created_at` | whitelist: `created_at`, `title` |
+| `order` | `desc` | `asc` / `desc` |
+| `user_id` | - | กรองตามผู้เขียน |
 
-`GET /users` ใช้ `page` / `limit` แบบเดียวกัน
+`GET /users` ใช้ `page` / `limit` แบบเดียวกัน (ไม่มี search/sort/filter)
 
-*P2* = ยังไม่มีใน P1 ดูลำดับได้ที่ `PLAN.md` — เอาป้ายนี้ออกเมื่อทำเสร็จ
+`sort` / `order` / `user_id` ที่ส่งค่านอก whitelist คืน **400 พร้อมบอกว่ารับค่าอะไรได้บ้าง**
+ไม่เงียบๆ ถอยไปใช้ default — ส่งผิดควรได้รู้ และ ORDER BY ประกอบจาก constant เท่านั้น
+ไม่เอา string จาก query มาต่อ SQL
 
 ### ตัวอย่าง
 
@@ -254,8 +256,8 @@ curl -X POST http://localhost:8080/api/v1/blogs \
   -H 'Authorization: Bearer <token>' \
   -d '{"title":"Hello","content":"First post"}'
 
-# list พร้อม pagination
-curl 'http://localhost:8080/api/v1/blogs?page=1&limit=20'
+# list พร้อม pagination + search + sort
+curl 'http://localhost:8080/api/v1/blogs?page=1&limit=20&search=golang&sort=created_at&order=desc'
 ```
 
 ## Response Format
@@ -317,6 +319,19 @@ curl 'http://localhost:8080/api/v1/blogs?page=1&limit=20'
 
 status พวกนี้ไม่ได้ map กระจายตาม handler — handler แค่ `return err` แล้ว global error handler
 แปลง domain error จาก `internal/apperr` เป็น HTTP ที่เดียว
+
+## Log
+
+`log/slog` เป็น JSON ทั้งหมด ทุกบรรทัดมี `request_id` ตัวเดียวกับที่อยู่ใน response
+เจอ 500 ก็เอา `request_id` จาก response ไป grep ใน log ได้เลย
+
+```json
+{"time":"...","level":"WARN","msg":"request","request_id":"sTJU...","method":"GET","path":"/api/v1/blogs","status":400,"latency_ms":0.027,"remote_ip":"::1"}
+```
+
+level ผูกกับ status: 5xx = ERROR, 4xx = WARN, ที่เหลือ INFO
+`request_id` เดินไปกับ `context.Context` ด้วย (`internal/logging`) service กับ repository
+เลย log ได้โดยไม่ต้องรู้จัก echo
 
 ## Test
 

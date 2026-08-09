@@ -20,11 +20,14 @@ func NewBlogHandler(blogs *service.BlogService) *BlogHandler {
 }
 
 func (h *BlogHandler) List(c echo.Context) error {
-	var q request.ListQuery
+	var q request.BlogQuery
 	if err := c.Bind(&q); err != nil {
 		return response.BadRequest(c, "Invalid query parameter")
 	}
-	q.Normalize()
+
+	if err := q.Normalize(); err != nil {
+		return response.BadRequest(c, err.Error())
+	}
 
 	blogs, total, err := h.blogs.GetBlogs(c.Request().Context(), q)
 	if err != nil {

@@ -26,7 +26,7 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
 	var user model.User
 
-	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
+	if err := conn(ctx, r.db).Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.NotFound("User")
 		}
@@ -39,7 +39,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	var user model.User
 
-	if err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error; err != nil {
+	if err := conn(ctx, r.db).First(&user, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.NotFound("User")
 		}
@@ -52,7 +52,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.Use
 func (r *UserRepository) FindAll(ctx context.Context, offset, limit int) ([]model.User, error) {
 	var users []model.User
 
-	err := r.db.WithContext(ctx).
+	err := conn(ctx, r.db).
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
@@ -67,7 +67,7 @@ func (r *UserRepository) FindAll(ctx context.Context, offset, limit int) ([]mode
 func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 	var total int64
 
-	if err := r.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error; err != nil {
+	if err := conn(ctx, r.db).Model(&model.User{}).Count(&total).Error; err != nil {
 		return 0, fmt.Errorf("count users: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func (r *UserRepository) Count(ctx context.Context) (int64, error) {
 }
 
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
-	if err := r.db.WithContext(ctx).Create(user).Error; err != nil {
+	if err := conn(ctx, r.db).Create(user).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			return apperr.ErrEmailTaken
 		}

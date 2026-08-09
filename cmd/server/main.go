@@ -18,6 +18,7 @@ import (
 	"github.com/thitiphongD/blog-user-api/internal/config"
 	"github.com/thitiphongD/blog-user-api/internal/database"
 	"github.com/thitiphongD/blog-user-api/internal/handler"
+	"github.com/thitiphongD/blog-user-api/internal/middleware"
 	"github.com/thitiphongD/blog-user-api/internal/migrate"
 	"github.com/thitiphongD/blog-user-api/internal/repository"
 	"github.com/thitiphongD/blog-user-api/internal/response"
@@ -101,7 +102,8 @@ func newEcho(cfg *config.Config, db *gorm.DB) *echo.Echo {
 
 	// Recover อยู่ชั้นในกว่า Logger ตั้งใจ — panic ถูกจับก่อน Logger เลยยัง log 500 ได้ตามปกติ
 	e.Use(echomw.RequestID())
-	e.Use(echomw.Logger())
+	e.Use(middleware.RequestContext())
+	e.Use(middleware.Logger())
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 
@@ -109,13 +111,14 @@ func newEcho(cfg *config.Config, db *gorm.DB) *echo.Echo {
 
 	userRepo := repository.NewUserRepository(db)
 	blogRepo := repository.NewBlogRepository(db)
+	tx := repository.NewTxManager(db)
 
 	routes.Register(e, routes.Deps{
 		JWT:    jwt,
 		Health: handler.NewHealthHandler(db),
 		Auth:   handler.NewAuthHandler(service.NewAuthService(userRepo, jwt)),
 		User:   handler.NewUserHandler(service.NewUserService(userRepo)),
-		Blog:   handler.NewBlogHandler(service.NewBlogService(blogRepo)),
+		Blog:   handler.NewBlogHandler(service.NewBlogService(blogRepo, tx)),
 	})
 
 	return e
