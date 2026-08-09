@@ -262,6 +262,28 @@ curl -X POST http://localhost:8080/api/v1/blogs \
 curl 'http://localhost:8080/api/v1/blogs?page=1&limit=20&search=golang&sort=created_at&order=desc'
 ```
 
+## Postman
+
+`postman/blog-user-api.postman_collection.json` — import ไฟล์เดียวจบ ไม่ต้องมี environment แยก
+(ตัวแปรอยู่ในตัว collection แล้ว)
+
+รันเรียงจากบนลงล่างได้เลย `token` / `user_id` / `blog_id` เก็บจาก response อัตโนมัติ
+ไม่ต้องก๊อป token มือ
+
+5 โฟลเดอร์ 27 request — Health / Auth / Blog / User และ **Negative** ที่รวมเคสซึ่ง
+*ต้องพัง*: register ซ้ำ 409, validate ไม่ผ่าน 422, JSON พัง 400, รหัสผิด 401,
+email ที่ไม่มีในระบบ 401 (ต้องได้ข้อความเดียวกับรหัสผิด), ไม่มี token 401,
+id ไม่ใช่ UUID 400, sort/order นอก whitelist 400 — ถ้าอันไหนดันผ่านแปลว่ามีปัญหา
+
+รันทั้งชุดแบบไม่เปิด Postman:
+
+```bash
+docker compose up -d
+npx newman run postman/blog-user-api.postman_collection.json
+```
+
+รันซ้ำได้เรื่อยๆ — Register รับทั้ง 201 และ 409 เลยไม่พังตอนรันรอบสอง
+
 ## Response Format
 
 ทุก response หน้าตาเหมือนกันหมด ออกจาก `internal/response` ที่เดียว
