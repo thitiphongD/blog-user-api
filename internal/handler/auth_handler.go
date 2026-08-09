@@ -20,6 +20,18 @@ func NewAuthHandler(auth *service.AuthService) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
 
+// Register สมัครสมาชิก ไม่ auto-login
+//
+//	@Summary	สมัครสมาชิก
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		request.RegisterRequest	true	"ข้อมูลสมัคร"
+//	@Success	201		{object}	response.Body{data=dto.UserResponse}
+//	@Failure	400		{object}	response.Body
+//	@Failure	409		{object}	response.Body	"email ซ้ำ"
+//	@Failure	422		{object}	response.Body	"validate ไม่ผ่าน"
+//	@Router		/api/v1/auth/register [post]
 func (h *AuthHandler) Register(c echo.Context) error {
 	var req request.RegisterRequest
 	if err := c.Bind(&req); err != nil {
@@ -38,6 +50,17 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	return response.Created(c, "User created successfully", dto.NewUserResponse(*user))
 }
 
+// Login แลก email/password เป็น JWT
+//
+//	@Summary	ล็อกอิน
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		request.LoginRequest	true	"email กับ password"
+//	@Success	200		{object}	response.Body{data=dto.AuthResponse}
+//	@Failure	401		{object}	response.Body	"email หรือ password ผิด"
+//	@Failure	422		{object}	response.Body
+//	@Router		/api/v1/auth/login [post]
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req request.LoginRequest
 	if err := c.Bind(&req); err != nil {
@@ -57,6 +80,15 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		dto.NewAuthResponse(result.Token, result.ExpiredAt, *result.User))
 }
 
+// Me ข้อมูลของเจ้าของ token
+//
+//	@Summary	ดูข้อมูลตัวเอง
+//	@Tags		auth
+//	@Produce	json
+//	@Security	BearerAuth
+//	@Success	200	{object}	response.Body{data=dto.UserResponse}
+//	@Failure	401	{object}	response.Body
+//	@Router		/api/v1/auth/me [get]
 func (h *AuthHandler) Me(c echo.Context) error {
 	userID, err := middleware.UserID(c)
 	if err != nil {

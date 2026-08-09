@@ -27,6 +27,15 @@ import (
 	"github.com/thitiphongD/blog-user-api/internal/validator"
 )
 
+// @title						Blog User API
+// @version					1.0
+// @description				REST API สำหรับ blog — อ่านได้ทุกคน แก้ได้เฉพาะเจ้าของ
+// @BasePath					/
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				ใส่ "Bearer " นำหน้า token ที่ได้จาก /api/v1/auth/login
+
 const shutdownTimeout = 10 * time.Second
 
 func main() {

@@ -1,0 +1,39 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint # เจอ err == target ที่ควรเป็น errors.Is — สำคัญกับ domain error ของโปรเจกต์นี้
+    - goconst
+    - gocritic
+    - misspell
+    - noctx # เจอ HTTP/DB call ที่ลืมส่ง context
+    - revive
+    - sqlclosecheck
+    - unconvert
+    - whitespace
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true # ไม่บังคับ doc comment ทุก exported symbol
+    goconst:
+      min-occurrences: 4
+
+  exclusions:
+    rules:
+      # เทสต์เขียนซ้ำๆ ได้ ไม่ต้องบังคับ dedupe
+      - path: _test\.go
+        linters:
+          - goconst
+          - dupl
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -17,6 +17,13 @@ func NewHealthHandler(db *gorm.DB) *HealthHandler {
 
 // Health ping DB ด้วย ไม่ใช่แค่ตอบ 200 ลอยๆ — docker healthcheck ยิงตัวนี้
 // api ที่ต่อ DB ไม่ได้ก็ไม่ควรนับว่า healthy
+//
+//	@Summary	เช็คว่า API กับ DB พร้อม
+//	@Tags		health
+//	@Produce	json
+//	@Success	200	{object}	response.Body
+//	@Failure	500	{object}	response.Body
+//	@Router		/health [get]
 func (h *HealthHandler) Health(c echo.Context) error {
 	sqlDB, err := h.db.DB()
 	if err != nil {

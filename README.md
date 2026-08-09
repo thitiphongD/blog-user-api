@@ -337,17 +337,45 @@ level ผูกกับ status: 5xx = ERROR, 4xx = WARN, ที่เหลื�
 
 ```bash
 go test ./...
+go test -race ./...
 go test -cover ./internal/service/...
 ```
 
-Service layer ทดสอบด้วย mock repository (เพราะ service ผูก interface) ไม่ต้องมี DB
+Service layer ทดสอบด้วย mock repository เขียนมือ (เพราะ service ผูก interface) ไม่ต้องมี DB
+ไม่ต้องลง mock generator เพิ่ม — mock เป็น struct ที่มี func field ธรรมดา method ไหนไม่ได้เซ็ต
+แล้วถูกเรียกจะ panic ซึ่งใช้จับได้เลยว่า ownership check กัน `Update`/`Delete` ได้จริง
+
+ที่คุมไว้: register hash password, email ซ้ำ, login สำเร็จ/รหัสผิด/email ไม่มีในระบบ
+(ต้องได้ `ErrInvalidCredential` ไม่ใช่ `ErrNotFound` ไม่งั้นบอกใบ้ว่า email ไหนสมัครไว้),
+ownership ของ update/delete, transaction ของ create, pagination clamp, sort/order whitelist,
+การคำนวณ `total_page`
 
 ## Lint
 
 ```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 golangci-lint run
 ```
 
+config อยู่ที่ `.golangci.yml` (schema v2) — `errorlint` เปิดไว้เพราะโปรเจกต์นี้พึ่ง
+`errors.Is` กับ domain error ถ้าใครเผลอเขียน `err == apperr.ErrNotFound` จะโดนจับ
+
+## CI
+
+`.github/workflows/ci.yml` รัน build / vet / `go test -race` / golangci-lint
+แล้วเช็คด้วยว่า `docs/` ที่ commit ไว้ยังตรงกับ annotation ในโค้ด — แก้ handler แล้วลืม
+`swag init` จะ fail ตรงนั้น
+
 ## Docs
 
-Swagger อยู่ที่ `http://localhost:8080/swagger/index.html`
+Swagger UI อยู่ที่ `http://localhost:8080/swagger/index.html` spec ดิบที่ `/swagger/doc.json`
+
+spec generate จาก annotation บน handler แล้ว **commit ลงรีโป** (`docs/`) เพราะ build
+ต้องใช้ ไม่งั้นคนโคลนไปต้องลง swag ก่อนถึงจะ build ได้ แก้ annotation แล้วต้อง gen ใหม่:
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.16.4
+swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency
+```
+
+`--parseDependency` จำเป็น ไม่ใส่แล้ว swag หา type ใน `internal/dto/response` ไม่เจอ

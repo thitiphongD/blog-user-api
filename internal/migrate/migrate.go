@@ -8,6 +8,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres" // ลงทะเบียน driver ให้ scheme postgres://
@@ -28,7 +29,11 @@ func Up(dbURL string) error {
 	if err != nil {
 		return fmt.Errorf("init migrate: %w", err)
 	}
-	defer m.Close()
+	defer func() {
+		if srcErr, dbErr := m.Close(); srcErr != nil || dbErr != nil {
+			slog.Warn("close migrate", "source", srcErr, "database", dbErr)
+		}
+	}()
 
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("run migration: %w", err)

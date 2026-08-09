@@ -1,0 +1,530 @@
+basePath: /
+definitions:
+  github_com_thitiphongD_blog-user-api_internal_dto_request.CreateBlogRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      title:
+        maxLength: 200
+        minLength: 1
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_request.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_request.RegisterRequest:
+    properties:
+      email:
+        description: max=72 เพราะ bcrypt กินได้แค่ 72 bytes เกินกว่านั้นมันตัดทิ้งเงียบๆ
+        maxLength: 255
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateBlogRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      title:
+        maxLength: 200
+        minLength: 1
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_response.AuthResponse:
+    properties:
+      expired_at:
+        type: string
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse'
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_response.AuthorResponse:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_response.BlogResponse:
+    properties:
+      author:
+        $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.AuthorResponse'
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_response.Body:
+    properties:
+      data: {}
+      errors:
+        additionalProperties:
+          type: string
+        type: object
+      message:
+        type: string
+      pagination:
+        $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Pagination'
+      request_id:
+        type: string
+      status:
+        type: integer
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  github_com_thitiphongD_blog-user-api_internal_response.Pagination:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_page:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: REST API สำหรับ blog — อ่านได้ทุกคน แก้ได้เฉพาะเจ้าของ
+  title: Blog User API
+  version: "1.0"
+paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: email กับ password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.AuthResponse'
+              type: object
+        "401":
+          description: email หรือ password ผิด
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: ล็อกอิน
+      tags:
+      - auth
+  /api/v1/auth/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: ดูข้อมูลตัวเอง
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ข้อมูลสมัคร
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "409":
+          description: email ซ้ำ
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: validate ไม่ผ่าน
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: สมัครสมาชิก
+      tags:
+      - auth
+  /api/v1/blogs:
+    get:
+      parameters:
+      - default: 1
+        description: หน้า เริ่มที่ 1
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: ต่อหน้า สูงสุด 100
+        in: query
+        name: limit
+        type: integer
+      - description: ค้นจาก title/content
+        in: query
+        name: search
+        type: string
+      - default: created_at
+        description: คอลัมน์ที่ใช้เรียง
+        enum:
+        - created_at
+        - title
+        in: query
+        name: sort
+        type: string
+      - default: desc
+        description: ทิศทางการเรียง
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - description: กรองตามผู้เขียน (UUID)
+        in: query
+        name: user_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.BlogResponse'
+                  type: array
+              type: object
+        "400":
+          description: sort/order/user_id นอก whitelist
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: list blog
+      tags:
+      - blog
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: title กับ content
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.CreateBlogRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.BlogResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: สร้าง blog
+      tags:
+      - blog
+  /api/v1/blogs/{id}:
+    delete:
+      parameters:
+      - description: blog id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "403":
+          description: ไม่ใช่เจ้าของ
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: ลบ blog
+      tags:
+      - blog
+    get:
+      parameters:
+      - description: blog id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.BlogResponse'
+              type: object
+        "400":
+          description: id ไม่ใช่ UUID
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: ดู blog ตาม id
+      tags:
+      - blog
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: blog id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ต้องส่ง title กับ content ครบ
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.UpdateBlogRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.BlogResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "403":
+          description: ไม่ใช่เจ้าของ
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: แก้ blog
+      tags:
+      - blog
+  /api/v1/users:
+    get:
+      parameters:
+      - default: 1
+        description: หน้า เริ่มที่ 1
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: ต่อหน้า สูงสุด 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: list user
+      tags:
+      - user
+  /api/v1/users/{id}:
+    get:
+      parameters:
+      - description: user id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.UserResponse'
+              type: object
+        "400":
+          description: id ไม่ใช่ UUID
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      security:
+      - BearerAuth: []
+      summary: ดู user ตาม id
+      tags:
+      - user
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body'
+      summary: เช็คว่า API กับ DB พร้อม
+      tags:
+      - health
+securityDefinitions:
+  BearerAuth:
+    description: ใส่ "Bearer " นำหน้า token ที่ได้จาก /api/v1/auth/login
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

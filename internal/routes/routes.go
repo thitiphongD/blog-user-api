@@ -3,7 +3,9 @@ package routes
 
 import (
 	"github.com/labstack/echo/v4"
+	echoswagger "github.com/swaggo/echo-swagger"
 
+	_ "github.com/thitiphongD/blog-user-api/docs" // spec ที่ swag gen ไว้ ต้อง import ถึงจะโผล่
 	"github.com/thitiphongD/blog-user-api/internal/auth"
 	"github.com/thitiphongD/blog-user-api/internal/handler"
 	"github.com/thitiphongD/blog-user-api/internal/middleware"
@@ -21,6 +23,7 @@ func Register(e *echo.Echo, d Deps) {
 	protected := middleware.JWT(d.JWT)
 
 	e.GET("/health", d.Health.Health)
+	e.GET("/swagger/*", echoswagger.WrapHandler)
 
 	v1 := e.Group("/api/v1")
 
