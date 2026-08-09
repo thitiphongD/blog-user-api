@@ -64,8 +64,8 @@ internal/
   middleware/               request id / logger / recover / cors / jwt
   routes/                   ประกอบ route
   validator/                validator + error translator
-  auth/                     sign/verify JWT (ไม่รู้จัก echo)
-  response/                 response กลางทั้งหมด
+  auth/                     JWT sign/verify + bcrypt (ไม่รู้จัก echo)
+  response/                 envelope กลาง + global error handler
 
 docs/                       swagger
 ```
@@ -215,7 +215,7 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 | GET | `/blogs/:id` | ดู blog รายอัน — public |
 | POST | `/blogs` * | สร้าง |
 | PUT | `/blogs/:id` * | แก้ (replace เต็ม ส่ง title+content ครบ) — **เจ้าของเท่านั้น** |
-| DELETE | `/blogs/:id` * | ลบ (soft delete) — **เจ้าของเท่านั้น** |
+| DELETE | `/blogs/:id` * | ลบ (soft delete) คืน 200 ไม่ใช่ 204 — **เจ้าของเท่านั้น** |
 
 `/blogs` เป็น public แต่ `/users` ปิด → `author` ใน `BlogResponse` มีแค่ `id` กับ `name`
 **ไม่มี email** ไม่งั้นปิดประตูหน้าแล้วเปิดประตูหลัง
@@ -262,6 +262,7 @@ curl 'http://localhost:8080/api/v1/blogs?page=1&limit=20'
 
 ทุก response หน้าตาเหมือนกันหมด ออกจาก `internal/response` ที่เดียว
 และมี `request_id` + `timestamp` ติดมาทุกก้อน (เอาไว้ตาม log)
+เวลาทุกตัวเป็น UTC ลงท้ายด้วย `Z` ทั้งหมด ไม่มีตัวไหนโผล่มาเป็น local offset
 
 ```json
 {
