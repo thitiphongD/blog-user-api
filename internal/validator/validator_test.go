@@ -109,3 +109,72 @@ func longName() string {
 
 	return string(name)
 }
+
+func TestErrorImplementsError(t *testing.T) {
+	var err error = &validator.Error{Fields: map[string]string{"name": "Name is required"}}
+
+	if err.Error() != "validation failed" {
+		t.Fatalf("Error() = %q", err.Error())
+	}
+}
+
+// field ที่ไม่มี json tag หรือเป็น "-" ต้องถอยไปใช้ชื่อ field ของ Go
+// ไม่งั้น key จะกลายเป็นค่าว่างแล้ว error ทับกันหมด
+type noTag struct {
+	Plain   string `validate:"required"`
+	Skipped string `json:"-"        validate:"required"`
+	Weird   string `json:"_secret"  validate:"required"`
+}
+
+func TestFieldNameFallback(t *testing.T) {
+	var verr *validator.Error
+	if !errors.As(validator.New().Validate(&noTag{}), &verr) {
+		t.Fatal("ควรไม่ผ่าน แต่ผ่าน")
+	}
+
+	for _, key := range []string{"Plain", "Skipped"} {
+		if verr.Fields[key] == "" {
+			t.Fatalf("ไม่มี key %s: %v", key, verr.Fields)
+		}
+	}
+
+	// ชื่อที่ขึ้นต้นด้วย _ แปลงเป็นคำขึ้นต้นประโยคไม่ได้ ต้องคืนตามเดิมไม่ใช่พัง
+	if got := verr.Fields["_secret"]; got != "_secret is required" {
+		t.Fatalf("ข้อความ = %q", got)
+	}
+}
+
+type tagVariants struct {
+	ID     string `json:"id"     validate:"uuid"`
+	Amount string `json:"amount" validate:"numeric"`
+}
+
+func TestMessagesForOtherTags(t *testing.T) {
+	var verr *validator.Error
+	if !errors.As(validator.New().Validate(&tagVariants{ID: "not-a-uuid", Amount: "abc"}), &verr) {
+		t.Fatal("ควรไม่ผ่าน แต่ผ่าน")
+	}
+
+	if got := verr.Fields["id"]; got != "Id must be a valid UUID" {
+		t.Fatalf("ข้อความของ uuid = %q", got)
+	}
+
+	// tag ที่ยังไม่ได้เขียนข้อความไว้ ต้องได้ข้อความกลางๆ ไม่ใช่ค่าว่าง
+	if got := verr.Fields["amount"]; got != "Amount is invalid" {
+		t.Fatalf("ข้อความของ tag ที่ไม่รู้จัก = %q", got)
+	}
+}
+
+// ส่งของที่ไม่ใช่ struct เข้ามา = ใช้ผิดวิธี ต้องเด้ง error เดิมออกไป (กลายเป็น 500)
+// ไม่ใช่แปลงเป็น 422 ทั้งที่ client ไม่ได้ทำอะไรผิด
+func TestValidateNonStructReturnsRawError(t *testing.T) {
+	err := validator.New().Validate("ไม่ใช่ struct")
+	if err == nil {
+		t.Fatal("ควร error แต่ผ่านไปได้")
+	}
+
+	var verr *validator.Error
+	if errors.As(err, &verr) {
+		t.Fatal("กลายเป็น validation error ทั้งที่เป็นความผิดของโค้ดเราเอง")
+	}
+}

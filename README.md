@@ -388,15 +388,19 @@ make test-integration  # ยิง postgres จริง (ยก container ใ�
 
 | ชั้น | coverage |
 |---|---|
-| `config` / `dto/request` / `logging` / `model` / `response` | 100% |
+| `config` / `dto/request` / `logging` / `middleware` / `model` / `response` / `validator` | 100% |
 | `service` | 97.4% |
 | `handler` | 96.0% |
-| `middleware` | 94.6% |
 | `auth` | 89.3% |
-| `validator` | 81.2% |
 
-ที่เหลือใน `handler` คือ branch ของ `middleware.UserID` ซึ่งวิ่งไม่ถึงผ่าน route จริง
-(มันพังได้ต่อเมื่อมีคนลืมใส่ JWT middleware ให้ route นั้น) — เก็บไว้เป็นกันชน ไม่ไล่ทดสอบ
+ที่ไม่ถึง 100% เหลือแต่ branch ที่**วิ่งไม่ถึงผ่านทางปกติ** ตั้งใจไม่ไล่ทดสอบ:
+
+- `middleware.UserID` ใน handler — พังได้ต่อเมื่อมีคนลืมใส่ JWT middleware ให้ route นั้น
+- `jwt.SignedString` — HS256 กับ key ที่เป็น `[]byte` ไม่มีทางพัง
+- เช็ค signing method ใน keyfunc — `WithValidMethods` ตัดไปก่อนแล้ว เก็บไว้เป็นกันชนสองชั้น
+- `panic` ใน `init()` ตอน hash dummy — string คงที่ 25 bytes ไม่มีทางเกิน 72
+
+ทั้งหมดเป็นกันชนที่ควรมี ไม่ใช่โค้ดตาย — บิดเทสต์ให้ถึงมันได้ coverage สวยแต่ไม่ได้อะไร
 
 `repository` ไม่มี unit test เพราะ mock พิสูจน์ SQL แทนไม่ได้ — ดูหัวข้อ integration test ข้างล่าง
 

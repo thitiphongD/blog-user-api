@@ -18,6 +18,7 @@ import (
 	"github.com/thitiphongD/blog-user-api/internal/auth"
 	"github.com/thitiphongD/blog-user-api/internal/logging"
 	"github.com/thitiphongD/blog-user-api/internal/middleware"
+	"github.com/thitiphongD/blog-user-api/internal/response"
 )
 
 func newContext(t *testing.T, header string) echo.Context {
@@ -210,4 +211,35 @@ func lastLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	}
 
 	return line
+}
+
+// handler คืน error → Logger ต้องส่งต่อให้ ErrorHandler เขียน response ก่อน
+// แล้วค่อย log ด้วย status จริง พร้อมแนบข้อความ error ไว้ให้ตามได้
+func TestLoggerRecordsHandlerError(t *testing.T) {
+	var buf bytes.Buffer
+	restore := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	defer slog.SetDefault(restore)
+
+	e := echo.New()
+	e.HTTPErrorHandler = response.ErrorHandler
+	e.Use(echomw.RequestID())
+	e.Use(middleware.RequestContext())
+	e.Use(middleware.Logger())
+	e.GET("/", func(echo.Context) error { return apperr.ErrForbidden })
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+	line := lastLine(t, &buf)
+
+	if line["error"] != apperr.ErrForbidden.Error() {
+		t.Fatalf("ไม่ได้แนบ error ไว้ใน log: %v", line)
+	}
+	if line["status"] != float64(http.StatusForbidden) {
+		t.Fatalf("status ใน log = %v — log ก่อนที่ response จะถูกเขียนจริง", line["status"])
+	}
+	if line["level"] != "WARN" {
+		t.Fatalf("level = %v อยากได้ WARN", line["level"])
+	}
 }
