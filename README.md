@@ -389,12 +389,12 @@ make test-integration  # ยิง postgres จริง (ยก container ใ�
 | ชั้น | coverage |
 |---|---|
 | `config` / `dto/request` / `logging` / `model` | 100% |
+| `service` | 97.4% |
 | `middleware` | 94.6% |
 | `auth` | 89.3% |
-| `response` | 81.0% |
 | `validator` | 81.2% |
+| `response` | 81.0% |
 | `handler` | 70.7% |
-| `service` | 56.4% |
 
 `repository` ไม่มี unit test เพราะ mock พิสูจน์ SQL แทนไม่ได้ — ดูหัวข้อ integration test ข้างล่าง
 
@@ -406,6 +406,10 @@ Service layer ทดสอบด้วย mock repository เขียนมื�
 (ต้องได้ `ErrInvalidCredential` ไม่ใช่ `ErrNotFound` ไม่งั้นบอกใบ้ว่า email ไหนสมัครไว้),
 ownership ของ update/delete, transaction ของ create, pagination clamp, sort/order whitelist,
 การคำนวณ `total_page`
+
+ทาง error ก็คุมด้วย ไม่ใช่เทสต์แต่ทางที่สำเร็จ: **DB ล่มตอน login ต้องเด้งเป็น 500 ไม่ใช่
+กลายเป็น "รหัสผิด"** (ไม่งั้น DB ล่มทีไรผู้ใช้ไปนั่งรีเซ็ตรหัสกันทั้งบ้าน), `Count` พังแล้ว
+ต้องไม่ยิง `FindAll` ต่อ, สร้างสำเร็จแต่อ่านกลับพังต้องไม่คืน blog ที่ไม่มี author ออกไปเงียบๆ
 
 ### เทสต์ฝั่ง HTTP
 

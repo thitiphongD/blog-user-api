@@ -12,6 +12,8 @@ import (
 	"github.com/thitiphongD/blog-user-api/internal/model"
 )
 
+var errRepo = errors.New("repository พัง")
+
 func blogQuery(page, limit int) request.BlogQuery {
 	q := request.BlogQuery{ListQuery: request.ListQuery{Page: page, Limit: limit}}
 	if err := q.Normalize(); err != nil {
@@ -150,5 +152,157 @@ func TestGetBlogByIDPropagatesNotFound(t *testing.T) {
 
 	if !errors.Is(err, apperr.ErrNotFound) {
 		t.Fatalf("อยากได้ ErrNotFound ได้ %v", err)
+	}
+}
+
+func TestUpdateBlogByOwner(t *testing.T) {
+	owner := uuid.New()
+	id := uuid.New()
+	tx := &fakeTx{}
+
+	var sent *model.Blog
+	stored := &model.Blog{ID: id, UserID: owner, Title: "Hello", Content: "First post"}
+
+	repo := &mockBlogRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.Blog, error) { return stored, nil },
+		update: func(_ context.Context, b *model.Blog) error {
+			sent = b
+			return nil
+		},
+	}
+
+	got, err := NewBlogService(repo, tx).UpdateBlog(context.Background(), owner, id, request.UpdateBlogRequest{
+		Title: "แก้แล้ว", Content: "edited",
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	if !tx.called {
+		t.Fatal("update + อ่านกลับ ไม่ได้อยู่ใน transaction")
+	}
+	if sent == nil || sent.Title != "แก้แล้ว" || sent.Content != "edited" {
+		t.Fatalf("ค่าที่ส่งให้ repository ไม่ถูก: %+v", sent)
+	}
+	if sent.UserID != owner {
+		t.Fatal("เจ้าของถูกเปลี่ยนระหว่างทาง")
+	}
+	if got.ID != id {
+		t.Fatal("ไม่ได้คืนตัวที่อ่านกลับมา")
+	}
+}
+
+func TestUpdateBlogPropagatesNotFound(t *testing.T) {
+	repo := &mockBlogRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.Blog, error) {
+			return nil, apperr.NotFound("Blog")
+		},
+	}
+
+	_, err := NewBlogService(repo, &fakeTx{}).UpdateBlog(
+		context.Background(), uuid.New(), uuid.New(), request.UpdateBlogRequest{Title: "x", Content: "y"},
+	)
+	if !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("อยากได้ ErrNotFound ได้ %v", err)
+	}
+}
+
+// repository พังกลาง transaction ต้องเด้ง error ออกมา ไม่ใช่คืน blog ที่ยังไม่ถูกเขียน
+func TestUpdateBlogPropagatesUpdateError(t *testing.T) {
+	owner := uuid.New()
+
+	repo := &mockBlogRepo{
+		findByID: func(_ context.Context, id uuid.UUID) (*model.Blog, error) {
+			return &model.Blog{ID: id, UserID: owner}, nil
+		},
+		update: func(context.Context, *model.Blog) error { return errRepo },
+	}
+
+	got, err := NewBlogService(repo, &fakeTx{}).UpdateBlog(
+		context.Background(), owner, uuid.New(), request.UpdateBlogRequest{Title: "x", Content: "y"},
+	)
+	if !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+	if got != nil {
+		t.Fatalf("พังแล้วยังคืน blog มา: %+v", got)
+	}
+}
+
+func TestCreateBlogPropagatesCreateError(t *testing.T) {
+	repo := &mockBlogRepo{
+		create: func(context.Context, *model.Blog) error { return errRepo },
+		findByID: func(context.Context, uuid.UUID) (*model.Blog, error) {
+			t.Error("create พังแล้วยังไปอ่านกลับต่อ")
+
+			return nil, errRepo
+		},
+	}
+
+	_, err := NewBlogService(repo, &fakeTx{}).CreateBlog(context.Background(), uuid.New(), request.CreateBlogRequest{
+		Title: "Hello", Content: "x",
+	})
+	if !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+}
+
+func TestGetBlogsStopsWhenCountFails(t *testing.T) {
+	repo := &mockBlogRepo{
+		count: func(context.Context, model.BlogFilter) (int64, error) { return 0, errRepo },
+		findAll: func(context.Context, model.BlogFilter) ([]model.Blog, error) {
+			t.Error("count พังแล้วยังไปเรียก FindAll ต่อ")
+
+			return nil, errRepo
+		},
+	}
+
+	if _, _, err := NewBlogService(repo, &fakeTx{}).GetBlogs(context.Background(), blogQuery(1, 20)); !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+}
+
+func TestGetBlogsPropagatesFindAllError(t *testing.T) {
+	repo := &mockBlogRepo{
+		count:   func(context.Context, model.BlogFilter) (int64, error) { return 1, nil },
+		findAll: func(context.Context, model.BlogFilter) ([]model.Blog, error) { return nil, errRepo },
+	}
+
+	if _, _, err := NewBlogService(repo, &fakeTx{}).GetBlogs(context.Background(), blogQuery(1, 20)); !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+}
+
+func TestDeleteBlogPropagatesNotFound(t *testing.T) {
+	repo := &mockBlogRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.Blog, error) {
+			return nil, apperr.NotFound("Blog")
+		},
+	}
+
+	err := NewBlogService(repo, &fakeTx{}).DeleteBlog(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("อยากได้ ErrNotFound ได้ %v", err)
+	}
+}
+
+// สร้างสำเร็จแต่อ่านกลับพัง ต้องไม่คืน blog ที่ไม่มี author ออกไปเงียบๆ
+func TestCreateBlogPropagatesRefetchError(t *testing.T) {
+	repo := &mockBlogRepo{
+		create: func(_ context.Context, b *model.Blog) error {
+			b.ID = uuid.New()
+			return nil
+		},
+		findByID: func(context.Context, uuid.UUID) (*model.Blog, error) { return nil, errRepo },
+	}
+
+	got, err := NewBlogService(repo, &fakeTx{}).CreateBlog(context.Background(), uuid.New(), request.CreateBlogRequest{
+		Title: "Hello", Content: "x",
+	})
+	if !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+	if got != nil {
+		t.Fatalf("อ่านกลับพังแล้วยังคืน blog: %+v", got)
 	}
 }

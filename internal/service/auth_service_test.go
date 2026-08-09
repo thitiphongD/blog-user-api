@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,5 +137,75 @@ func TestLoginWrongPassword(t *testing.T) {
 
 	if !errors.Is(err, apperr.ErrInvalidCredential) {
 		t.Fatalf("อยากได้ ErrInvalidCredential ได้ %v", err)
+	}
+}
+
+func TestGetMe(t *testing.T) {
+	id := uuid.New()
+	repo := &mockUserRepo{
+		findByID: func(_ context.Context, got uuid.UUID) (*model.User, error) {
+			return &model.User{ID: got, Email: "daew@example.com"}, nil
+		},
+	}
+
+	user, err := NewAuthService(repo, testJWT()).GetMe(context.Background(), id)
+	if err != nil {
+		t.Fatalf("get me: %v", err)
+	}
+	if user.ID != id {
+		t.Fatalf("ได้คนละคน: %v", user.ID)
+	}
+}
+
+func TestGetMePropagatesNotFound(t *testing.T) {
+	repo := &mockUserRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.User, error) {
+			return nil, apperr.NotFound("User")
+		},
+	}
+
+	_, err := NewAuthService(repo, testJWT()).GetMe(context.Background(), uuid.New())
+	if !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("อยากได้ ErrNotFound ได้ %v", err)
+	}
+}
+
+// รหัสยาวเกิน 72 bytes ทำให้ bcrypt คืน error — service ต้องไม่ไปเรียก Create ต่อ
+// (ปกติ validator กันไว้ก่อนแล้ว แต่ service ต้องไม่พังถ้ามีใครเรียกตรงๆ)
+func TestRegisterStopsWhenHashFails(t *testing.T) {
+	repo := &mockUserRepo{
+		create: func(context.Context, *model.User) error {
+			t.Error("hash พังแล้วยังไปเรียก Create ต่อ")
+
+			return nil
+		},
+	}
+
+	_, err := NewAuthService(repo, testJWT()).Register(context.Background(), request.RegisterRequest{
+		Name: "Daew", Email: "daew@example.com", Password: strings.Repeat("a", 73),
+	})
+	if err == nil {
+		t.Fatal("ควร error แต่ผ่านไปได้")
+	}
+}
+
+// DB พังต้องเด้งเป็น error จริงออกไป (= 500) ไม่ใช่กลายเป็น ErrInvalidCredential (= 401)
+// ไม่งั้น DB ล่มทีไร ผู้ใช้จะเห็นว่า "รหัสผิด" แล้วไปนั่งรีเซ็ตรหัสกันทั้งบ้าน
+func TestLoginPropagatesDatabaseError(t *testing.T) {
+	dbDown := errors.New("connection refused")
+
+	repo := &mockUserRepo{
+		findByEmail: func(context.Context, string) (*model.User, error) { return nil, dbDown },
+	}
+
+	_, err := NewAuthService(repo, testJWT()).Login(context.Background(), request.LoginRequest{
+		Email: "daew@example.com", Password: "password123",
+	})
+
+	if errors.Is(err, apperr.ErrInvalidCredential) {
+		t.Fatal("DB ล่มแล้วบอกผู้ใช้ว่ารหัสผิด")
+	}
+	if !errors.Is(err, dbDown) {
+		t.Fatalf("อยากได้ error เดิม ได้ %v", err)
 	}
 }
