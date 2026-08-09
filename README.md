@@ -1,5 +1,7 @@
 # Blog User API
 
+[![CI](https://github.com/thitiphongD/blog-user-api/actions/workflows/ci.yml/badge.svg)](https://github.com/thitiphongD/blog-user-api/actions/workflows/ci.yml)
+
 REST API สำหรับ blog — สมัคร/ล็อกอิน แล้วเขียน blog ของตัวเอง อ่านได้ทุกคน แก้ได้เฉพาะเจ้าของ
 เขียนด้วย Go + Echo + GORM + PostgreSQL
 
