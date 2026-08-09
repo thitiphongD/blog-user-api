@@ -33,7 +33,7 @@ PostgreSQL
 
 | ตัว | ใช้ทำอะไร |
 |---|---|
-| Go 1.24 | ภาษา |
+| Go 1.25 | ภาษา |
 | Echo v4 | HTTP framework |
 | GORM | query (ไม่ใช้ทำ migration) |
 | golang-migrate | migration, embed ไว้ใน binary |
@@ -111,7 +111,7 @@ JWT_EXPIRE_HOURS=24
 
 ## Installation
 
-ต้องมี Go 1.24+ และ Docker
+ต้องมี Go 1.25+ และ Docker
 
 ```bash
 git clone https://github.com/thitiphongD/blog-user-api.git
