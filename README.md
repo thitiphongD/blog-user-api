@@ -422,9 +422,9 @@ make test-integration  # ยิง postgres จริง (ยก container ใ�
 | ชั้น | coverage |
 |---|---|
 | `config` / `dto/request` / `logging` / `middleware` / `model` / `response` / `validator` | 100% |
-| `service` | 97.4% |
-| `handler` | 96.0% |
-| `auth` | 95.5% |
+| `handler` | 96.6% |
+| `service` | 95.9% |
+| `auth` | 92.9% |
 
 ที่ไม่ถึง 100% เหลือ 2 branch ที่**วิ่งไม่ถึงผ่านทางปกติ** ตั้งใจไม่ไล่ทดสอบ:
 

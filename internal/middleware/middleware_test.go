@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -241,5 +242,49 @@ func TestLoggerRecordsHandlerError(t *testing.T) {
 	}
 	if line["level"] != "WARN" {
 		t.Fatalf("level = %v อยากได้ WARN", line["level"])
+	}
+}
+
+// perMinute <= 0 ต้องแปลว่า "ปิด rate limit" ไม่ใช่ "ห้ามยิงเลยสักครั้ง"
+// ซึ่งเป็นสิ่งที่ limiter จะทำถ้าปล่อย burst เป็น 0
+func TestRateLimitDisabledWhenZero(t *testing.T) {
+	for _, perMinute := range []int{0, -1} {
+		t.Run(strconv.Itoa(perMinute), func(t *testing.T) {
+			e := echo.New()
+			e.Use(middleware.RateLimitAuth(perMinute))
+			e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+
+			for i := range 20 {
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+				if rec.Code != http.StatusOK {
+					t.Fatalf("ครั้งที่ %d ได้ status %d — ปิดอยู่แต่ดันบล็อก", i+1, rec.Code)
+				}
+			}
+		})
+	}
+}
+
+func TestRateLimitBlocksAfterQuota(t *testing.T) {
+	e := echo.New()
+	e.HTTPErrorHandler = response.ErrorHandler
+	e.Use(middleware.RateLimitAuth(3))
+	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	codes := make([]int, 0, 5)
+	for range 5 {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+		codes = append(codes, rec.Code)
+	}
+
+	for i := range 3 {
+		if codes[i] != http.StatusOK {
+			t.Fatalf("ยังไม่เกินโควตาแต่ครั้งที่ %d โดนบล็อก: %v", i+1, codes)
+		}
+	}
+	if codes[3] != http.StatusTooManyRequests || codes[4] != http.StatusTooManyRequests {
+		t.Fatalf("เกินโควตาแล้วไม่โดนบล็อก: %v", codes)
 	}
 }

@@ -2,6 +2,7 @@ package model_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -67,5 +68,48 @@ func TestOrderWhitelist(t *testing.T) {
 		if model.IsValidOrder(o) {
 			t.Fatalf("%q ไม่ควรผ่าน", o)
 		}
+	}
+}
+
+func TestRefreshTokenBeforeCreateFillsID(t *testing.T) {
+	token := &model.RefreshToken{TokenHash: "hash"}
+	if err := token.BeforeCreate(nil); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	if token.ID == uuid.Nil {
+		t.Fatal("ไม่ได้ id")
+	}
+
+	fixed := uuid.New()
+	kept := &model.RefreshToken{ID: fixed}
+	if err := kept.BeforeCreate(nil); err != nil {
+		t.Fatalf("hook: %v", err)
+	}
+	if kept.ID != fixed {
+		t.Fatal("id ที่ตั้งมาเองถูกทับ")
+	}
+}
+
+func TestRefreshTokenUsable(t *testing.T) {
+	now := time.Now()
+	revoked := now.Add(-time.Minute)
+
+	cases := []struct {
+		name  string
+		token model.RefreshToken
+		want  bool
+	}{
+		{"ยังไม่หมดอายุและไม่ถูกเพิกถอน", model.RefreshToken{ExpiresAt: now.Add(time.Hour)}, true},
+		{"หมดอายุแล้ว", model.RefreshToken{ExpiresAt: now.Add(-time.Hour)}, false},
+		{"ถูกเพิกถอนแล้ว", model.RefreshToken{ExpiresAt: now.Add(time.Hour), RevokedAt: &revoked}, false},
+		{"หมดอายุพอดี", model.RefreshToken{ExpiresAt: now}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.token.Usable(now); got != tc.want {
+				t.Fatalf("Usable = %v อยากได้ %v", got, tc.want)
+			}
+		})
 	}
 }

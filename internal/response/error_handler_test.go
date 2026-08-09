@@ -349,3 +349,43 @@ func (w *brokenWriter) Write([]byte) (int, error) {
 }
 
 func (w *brokenWriter) WriteHeader(int) {}
+
+func TestTooManyRequestsWriter(t *testing.T) {
+	c, rec := newContext(t)
+
+	if err := response.TooManyRequests(c, "Too many requests, please try again later"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d อยากได้ 429", rec.Code)
+	}
+
+	body := decodeBody(t, rec)
+	if body["success"] != false || body["request_id"] != "req-1" {
+		t.Fatalf("envelope ไม่ครบ: %s", rec.Body.String())
+	}
+}
+
+// rate limiter ของ echo โยน 429 มาเป็น HTTPError — ถ้าไม่ดักจะตกไป default แล้วกลายเป็น 500
+func TestErrorHandlerMaps429(t *testing.T) {
+	rec, body := handle(t, echo.NewHTTPError(http.StatusTooManyRequests))
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d อยากได้ 429", rec.Code)
+	}
+	if body["message"] != "Too many requests, please try again later" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}
+
+func TestErrorHandlerMapsInvalidRefresh(t *testing.T) {
+	rec, body := handle(t, apperr.ErrInvalidRefresh)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d อยากได้ 401", rec.Code)
+	}
+	if body["message"] != "Invalid or expired refresh token" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}

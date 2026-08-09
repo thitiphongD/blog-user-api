@@ -191,3 +191,25 @@ func TestRateLimitReturns429InEnvelope(t *testing.T) {
 
 	t.Fatalf("ยิง 5 ครั้งด้วยโควตา 2/นาที แต่ไม่โดนจำกัดเลย (status สุดท้าย %d)", last)
 }
+
+func TestLogoutBrokenJSON(t *testing.T) {
+	app := newApp(t)
+
+	rec := app.do(t, http.MethodPost, "/api/v1/auth/logout", `{oops`, "")
+
+	body := assertStatus(t, rec, http.StatusBadRequest)
+	if body["message"] != "Invalid request body" {
+		t.Fatalf("message = %v", body["message"])
+	}
+}
+
+func TestLogoutValidation(t *testing.T) {
+	app := newApp(t)
+
+	rec := app.do(t, http.MethodPost, "/api/v1/auth/logout", `{}`, "")
+
+	body := assertStatus(t, rec, http.StatusUnprocessableEntity)
+	if errs, ok := body["errors"].(map[string]any); !ok || errs["refresh_token"] == nil {
+		t.Fatalf("errors = %v", body["errors"])
+	}
+}

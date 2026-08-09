@@ -229,3 +229,100 @@ func TestLogoutWithUnknownToken(t *testing.T) {
 		t.Fatalf("อยากได้ ErrInvalidRefresh ได้ %v", err)
 	}
 }
+
+// DB พังต้องเด้งเป็น error จริง (500) ไม่ใช่กลายเป็น "token ไม่ถูกต้อง" (401)
+func TestRefreshPropagatesDatabaseError(t *testing.T) {
+	dbDown := errors.New("connection refused")
+
+	refresh := &mockRefreshRepo{
+		findByHash: func(context.Context, string) (*model.RefreshToken, error) { return nil, dbDown },
+	}
+
+	_, err := newAuthService(&mockUserRepo{}, refresh).Refresh(context.Background(), "raw")
+
+	if errors.Is(err, apperr.ErrInvalidRefresh) {
+		t.Fatal("DB ล่มแล้วบอกว่า token ไม่ถูกต้อง")
+	}
+	if !errors.Is(err, dbDown) {
+		t.Fatalf("อยากได้ error เดิม ได้ %v", err)
+	}
+}
+
+func TestLogoutPropagatesDatabaseError(t *testing.T) {
+	dbDown := errors.New("connection refused")
+
+	refresh := &mockRefreshRepo{
+		findByHash: func(context.Context, string) (*model.RefreshToken, error) { return nil, dbDown },
+	}
+
+	err := newAuthService(&mockUserRepo{}, refresh).Logout(context.Background(), "raw")
+	if !errors.Is(err, dbDown) {
+		t.Fatalf("อยากได้ error เดิม ได้ %v", err)
+	}
+}
+
+// เขียน refresh token ลง DB ไม่ได้ ต้องไม่คืน token ที่ระบบจำไม่ได้ออกไปให้ client
+func TestLoginFailsWhenRefreshTokenCannotBeStored(t *testing.T) {
+	hashed, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+
+	users := &mockUserRepo{
+		findByEmail: func(context.Context, string) (*model.User, error) {
+			return &model.User{ID: uuid.New(), Password: hashed}, nil
+		},
+	}
+	refresh := &mockRefreshRepo{
+		create: func(context.Context, *model.RefreshToken) error { return errRepo },
+	}
+
+	result, err := newAuthService(users, refresh).Login(context.Background(), loginReq("password123"))
+	if !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+	if result != nil {
+		t.Fatal("เก็บ token ไม่ได้แต่ยังคืน session ออกไป")
+	}
+}
+
+// เพิกถอนตัวเก่าไม่สำเร็จ ต้องไม่ออกใบใหม่ให้ ไม่งั้นใบเก่าจะยังใช้ได้คู่กับใบใหม่
+func TestRefreshFailsWhenRevokeFails(t *testing.T) {
+	userID := uuid.New()
+	stored := storedToken(userID, "raw", time.Now().Add(time.Hour))
+
+	users := &mockUserRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.User, error) {
+			return &model.User{ID: userID}, nil
+		},
+	}
+	refresh := &mockRefreshRepo{
+		findByHash: func(context.Context, string) (*model.RefreshToken, error) { return stored, nil },
+		revoke:     func(context.Context, uuid.UUID, time.Time) error { return errRepo },
+		create: func(context.Context, *model.RefreshToken) error {
+			t.Error("เพิกถอนตัวเก่าไม่สำเร็จแต่ยังออกใบใหม่")
+
+			return nil
+		},
+	}
+
+	if _, err := newAuthService(users, refresh).Refresh(context.Background(), "raw"); !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+}
+
+// จับ reuse ได้แต่ตัด session ไม่สำเร็จ ต้องเด้ง error จริงออกไป ไม่ใช่กลบเป็น 401
+func TestRefreshReusePropagatesRevokeAllError(t *testing.T) {
+	revokedAt := time.Now().Add(-time.Minute)
+	stored := storedToken(uuid.New(), "raw", time.Now().Add(time.Hour))
+	stored.RevokedAt = &revokedAt
+
+	refresh := &mockRefreshRepo{
+		findByHash:       func(context.Context, string) (*model.RefreshToken, error) { return stored, nil },
+		revokeAllForUser: func(context.Context, uuid.UUID, time.Time) error { return errRepo },
+	}
+
+	if _, err := newAuthService(&mockUserRepo{}, refresh).Refresh(context.Background(), "raw"); !errors.Is(err, errRepo) {
+		t.Fatalf("อยากได้ errRepo ได้ %v", err)
+	}
+}
