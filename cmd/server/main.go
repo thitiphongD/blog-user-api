@@ -119,18 +119,22 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 
-	jwt := auth.NewJWT(cfg.JWT.Secret, cfg.JWT.Expire)
+	jwt := auth.NewJWT(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 
 	userRepo := repository.NewUserRepository(db)
 	blogRepo := repository.NewBlogRepository(db)
+	refreshRepo := repository.NewRefreshTokenRepository(db)
 	tx := repository.NewTxManager(db)
 
+	authService := service.NewAuthService(userRepo, refreshRepo, tx, jwt, cfg.JWT.RefreshTTL)
+
 	routes.Register(e, routes.Deps{
-		JWT:    jwt,
-		Health: handler.NewHealthHandler(pinger),
-		Auth:   handler.NewAuthHandler(service.NewAuthService(userRepo, jwt)),
-		User:   handler.NewUserHandler(service.NewUserService(userRepo)),
-		Blog:   handler.NewBlogHandler(service.NewBlogService(blogRepo, tx)),
+		JWT:                    jwt,
+		AuthRateLimitPerMinute: cfg.RateLimit.AuthPerMinute,
+		Health:                 handler.NewHealthHandler(pinger),
+		Auth:                   handler.NewAuthHandler(authService),
+		User:                   handler.NewUserHandler(service.NewUserService(userRepo)),
+		Blog:                   handler.NewBlogHandler(service.NewBlogService(blogRepo, tx)),
 	})
 
 	return e

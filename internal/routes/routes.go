@@ -12,11 +12,12 @@ import (
 )
 
 type Deps struct {
-	JWT    *auth.JWT
-	Health *handler.HealthHandler
-	Auth   *handler.AuthHandler
-	User   *handler.UserHandler
-	Blog   *handler.BlogHandler
+	JWT                    *auth.JWT
+	AuthRateLimitPerMinute int
+	Health                 *handler.HealthHandler
+	Auth                   *handler.AuthHandler
+	User                   *handler.UserHandler
+	Blog                   *handler.BlogHandler
 }
 
 func Register(e *echo.Echo, d Deps) {
@@ -27,9 +28,16 @@ func Register(e *echo.Echo, d Deps) {
 
 	v1 := e.Group("/api/v1")
 
+	// rate limit เฉพาะ login กับ register ซึ่งเป็นเป้าของการเดารหัส
+	// refresh/logout ไม่ต้อง — token สุ่ม 256 bit เดาไม่ได้อยู่แล้ว และ client ปกติยิง refresh บ่อย
+	// จะโดนจำกัดไปด้วยเปล่าๆ ส่วน /blogs ที่เป็น public ยังไม่มีเหตุผลให้จำกัด
+	guessGuard := middleware.RateLimitAuth(d.AuthRateLimitPerMinute)
+
 	authGroup := v1.Group("/auth")
-	authGroup.POST("/register", d.Auth.Register)
-	authGroup.POST("/login", d.Auth.Login)
+	authGroup.POST("/register", d.Auth.Register, guessGuard)
+	authGroup.POST("/login", d.Auth.Login, guessGuard)
+	authGroup.POST("/refresh", d.Auth.Refresh)
+	authGroup.POST("/logout", d.Auth.Logout)
 	authGroup.GET("/me", d.Auth.Me, protected)
 
 	// /users ปิดทั้งกลุ่ม ไม่เปิด email ชาวบ้าน

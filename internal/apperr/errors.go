@@ -12,6 +12,7 @@ var (
 	ErrInvalidCredential = errors.New("invalid email or password")
 	ErrForbidden         = errors.New("permission denied")
 	ErrUnauthorized      = errors.New("unauthorized")
+	ErrInvalidRefresh    = errors.New("invalid or expired refresh token")
 )
 
 // NotFound ห่อ ErrNotFound พร้อมชื่อ resource เพื่อให้ message ตรงกับของที่หาไม่เจอจริง

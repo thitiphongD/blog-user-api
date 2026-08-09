@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/thitiphongD/blog-user-api/internal/apperr"
 	"github.com/thitiphongD/blog-user-api/internal/auth"
 	"github.com/thitiphongD/blog-user-api/internal/handler"
 	"github.com/thitiphongD/blog-user-api/internal/model"
@@ -24,10 +25,11 @@ import (
 // ได้ของแถมคือเทสต์วิ่งผ่าน route + validator + global error handler ของจริง
 // การ map error เป็น status เลยถูกเช็คไปด้วย ไม่ใช่เช็คแค่ค่าที่ handler return
 type app struct {
-	echo  *echo.Echo
-	users *fakeUserRepo
-	blogs *fakeBlogRepo
-	jwt   *auth.JWT
+	echo    *echo.Echo
+	users   *fakeUserRepo
+	blogs   *fakeBlogRepo
+	refresh *fakeRefreshRepo
+	jwt     *auth.JWT
 }
 
 func newApp(t *testing.T) *app {
@@ -35,6 +37,7 @@ func newApp(t *testing.T) *app {
 
 	users := &fakeUserRepo{}
 	blogs := &fakeBlogRepo{}
+	refresh := &fakeRefreshRepo{}
 	jwt := auth.NewJWT("test-secret", time.Hour)
 
 	e := echo.New()
@@ -42,14 +45,18 @@ func newApp(t *testing.T) *app {
 	e.HTTPErrorHandler = response.ErrorHandler
 
 	routes.Register(e, routes.Deps{
-		JWT:    jwt,
-		Health: handler.NewHealthHandler(&stubPinger{}),
-		Auth:   handler.NewAuthHandler(service.NewAuthService(users, jwt)),
-		User:   handler.NewUserHandler(service.NewUserService(users)),
-		Blog:   handler.NewBlogHandler(service.NewBlogService(blogs, passthroughTx{})),
+		JWT: jwt,
+		// ตั้งสูงไว้ เทสต์ชุดนี้ไม่ได้ทดสอบ rate limit (มีเทสต์แยกของมันเอง)
+		AuthRateLimitPerMinute: 1000,
+		Health:                 handler.NewHealthHandler(&stubPinger{}),
+		Auth: handler.NewAuthHandler(
+			service.NewAuthService(users, refresh, passthroughTx{}, jwt, 7*24*time.Hour),
+		),
+		User: handler.NewUserHandler(service.NewUserService(users)),
+		Blog: handler.NewBlogHandler(service.NewBlogService(blogs, passthroughTx{})),
 	})
 
-	return &app{echo: e, users: users, blogs: blogs, jwt: jwt}
+	return &app{echo: e, users: users, blogs: blogs, refresh: refresh, jwt: jwt}
 }
 
 // do ยิง request จริงเข้า echo — token ว่างแปลว่าไม่แนบ Authorization
@@ -173,6 +180,53 @@ func (m *fakeBlogRepo) Update(ctx context.Context, blog *model.Blog) error {
 }
 
 func (m *fakeBlogRepo) Delete(ctx context.Context, id uuid.UUID) error { return m.delete(ctx, id) }
+
+// fakeRefreshRepo เก็บ token ไว้ใน map จำลอง DB — พอสำหรับเทสต์ชั้น HTTP
+type fakeRefreshRepo struct {
+	tokens  map[string]*model.RefreshToken
+	revoked []uuid.UUID
+}
+
+func (m *fakeRefreshRepo) Create(_ context.Context, token *model.RefreshToken) error {
+	if m.tokens == nil {
+		m.tokens = map[string]*model.RefreshToken{}
+	}
+
+	token.ID = uuid.New()
+	m.tokens[token.TokenHash] = token
+
+	return nil
+}
+
+func (m *fakeRefreshRepo) FindByHash(_ context.Context, hash string) (*model.RefreshToken, error) {
+	if token, ok := m.tokens[hash]; ok {
+		return token, nil
+	}
+
+	return nil, apperr.NotFound("Refresh token")
+}
+
+func (m *fakeRefreshRepo) Revoke(_ context.Context, id uuid.UUID, at time.Time) error {
+	m.revoked = append(m.revoked, id)
+
+	for _, token := range m.tokens {
+		if token.ID == id {
+			token.RevokedAt = &at
+		}
+	}
+
+	return nil
+}
+
+func (m *fakeRefreshRepo) RevokeAllForUser(_ context.Context, userID uuid.UUID, at time.Time) error {
+	for _, token := range m.tokens {
+		if token.UserID == userID {
+			token.RevokedAt = &at
+		}
+	}
+
+	return nil
+}
 
 // passthroughTx รัน fn ตรงๆ — transaction จริงถูกเทสต์ที่ชั้น service แล้ว
 type passthroughTx struct{}

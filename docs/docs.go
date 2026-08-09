@@ -72,6 +72,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/logout": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "ออกจากระบบ",
+                "parameters": [
+                    {
+                        "description": "refresh token ของ session ที่จะออก",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/me": {
             "get": {
                 "security": [
@@ -107,6 +152,63 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "ต่ออายุ session",
+                "parameters": [
+                    {
+                        "description": "refresh token ที่ได้ตอน login",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_request.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_dto_response.AuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "token ผิด หมดอายุ หรือถูกใช้ไปแล้ว",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/github_com_thitiphongD_blog-user-api_internal_response.Body"
                         }
@@ -693,6 +795,17 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_thitiphongD_blog-user-api_internal_dto_request.RefreshRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_thitiphongD_blog-user-api_internal_dto_request.RegisterRequest": {
             "type": "object",
             "required": [
@@ -740,6 +853,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "expired_at": {
+                    "type": "string"
+                },
+                "refresh_expired_at": {
+                    "type": "string"
+                },
+                "refresh_token": {
                     "type": "string"
                 },
                 "token": {

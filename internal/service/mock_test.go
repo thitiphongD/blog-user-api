@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -104,6 +105,45 @@ func (m *mockBlogRepo) Delete(ctx context.Context, id uuid.UUID) error {
 		panic("unexpected call: Delete")
 	}
 	return m.delete(ctx, id)
+}
+
+type mockRefreshRepo struct {
+	create           func(ctx context.Context, token *model.RefreshToken) error
+	findByHash       func(ctx context.Context, hash string) (*model.RefreshToken, error)
+	revoke           func(ctx context.Context, id uuid.UUID, at time.Time) error
+	revokeAllForUser func(ctx context.Context, userID uuid.UUID, at time.Time) error
+}
+
+func (m *mockRefreshRepo) Create(ctx context.Context, token *model.RefreshToken) error {
+	if m.create == nil {
+		return nil
+	}
+
+	return m.create(ctx, token)
+}
+
+func (m *mockRefreshRepo) FindByHash(ctx context.Context, hash string) (*model.RefreshToken, error) {
+	if m.findByHash == nil {
+		panic("unexpected call: FindByHash")
+	}
+
+	return m.findByHash(ctx, hash)
+}
+
+func (m *mockRefreshRepo) Revoke(ctx context.Context, id uuid.UUID, at time.Time) error {
+	if m.revoke == nil {
+		return nil
+	}
+
+	return m.revoke(ctx, id, at)
+}
+
+func (m *mockRefreshRepo) RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error {
+	if m.revokeAllForUser == nil {
+		panic("unexpected call: RevokeAllForUser")
+	}
+
+	return m.revokeAllForUser(ctx, userID, at)
 }
 
 // fakeTx รัน fn ตรงๆ ไม่มี transaction จริง — service แค่ต้องเรียกให้ถูก

@@ -77,6 +77,10 @@ func Validation(c echo.Context, errs map[string]string) error {
 	return write(c, http.StatusUnprocessableEntity, false, "Validation failed", nil, errs, nil)
 }
 
+func TooManyRequests(c echo.Context, message string) error {
+	return write(c, http.StatusTooManyRequests, false, message, nil, nil, nil)
+}
+
 func InternalServerError(c echo.Context) error {
 	return write(c, http.StatusInternalServerError, false, "Internal server error", nil, nil, nil)
 }

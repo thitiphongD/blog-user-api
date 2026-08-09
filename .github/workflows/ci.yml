@@ -26,14 +26,11 @@ jobs:
         run: go test -race ./...
 
       # swagger spec commit ไว้ในรีโป ถ้า handler เปลี่ยนแล้วลืม gen ใหม่ต้องรู้ตรงนี้
+      # ใช้ target เดียวกับที่รันบนเครื่อง จะได้ไม่มีเคส "ในเครื่องผ่านแต่ CI ไม่ผ่าน"
       - name: Swagger docs ตรงกับ handler ไหม
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.4
-          swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency
-          git diff --exit-code -- docs/ || {
-            echo "::error::docs/ ไม่ตรงกับ annotation — รัน swag init แล้ว commit ด้วย"
-            exit 1
-          }
+          make swag-check
 
   integration:
     runs-on: ubuntu-latest

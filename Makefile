@@ -84,9 +84,13 @@ swag: ## gen swagger spec ใหม่จาก annotation
 	$(GOBIN)/swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency
 
 .PHONY: swag-check
-swag-check: swag ## เช็คว่า docs/ ที่ commit ไว้ยังตรงกับ annotation
-	@git diff --exit-code -- docs/ \
-		|| { echo "docs/ ไม่ตรงกับ annotation — commit ที่ gen ใหม่ด้วย"; exit 1; }
+swag-check: ## เช็คว่า docs/ ยังตรงกับ annotation ในโค้ด
+	@rm -rf .swagcheck
+	@$(GOBIN)/swag init -g cmd/server/main.go -o .swagcheck --parseInternal --parseDependency >/dev/null
+	@diff -q docs/swagger.json .swagcheck/swagger.json >/dev/null 2>&1 \
+		&& diff -q docs/swagger.yaml .swagcheck/swagger.yaml >/dev/null 2>&1 \
+		|| { rm -rf .swagcheck; echo "docs/ ไม่ตรงกับ annotation — สั่ง make swag แล้ว commit ด้วย"; exit 1; }
+	@rm -rf .swagcheck
 
 ## —— docker ————————————————————————————————————————————
 

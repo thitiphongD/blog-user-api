@@ -4,3 +4,4 @@ PLAN.md
 .env
 tmp/
 bin/
+.swagcheck/

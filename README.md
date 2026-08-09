@@ -102,7 +102,10 @@ SERVER_WRITE_TIMEOUT=10s
 SERVER_IDLE_TIMEOUT=60s
 
 JWT_SECRET=change-me-in-production
-JWT_EXPIRE_HOURS=24
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=168h
+
+RATE_LIMIT_AUTH_PER_MINUTE=10
 ```
 
 - `JWT_SECRET` เปลี่ยนก่อน deploy จริงด้วย อย่าปล่อยค่า default
@@ -214,10 +217,39 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 | Method | Path | คำอธิบาย |
 |---|---|---|
 | POST | `/auth/register` | สมัครสมาชิก — คืน 201 + user (ไม่ auto-login) |
-| POST | `/auth/login` | ล็อกอิน คืน JWT |
+| POST | `/auth/login` | ล็อกอิน คืน access token + refresh token |
+| POST | `/auth/refresh` | ต่ออายุ session — หมุน refresh token ทุกครั้ง |
+| POST | `/auth/logout` | เพิกถอนเฉพาะ session ที่ยื่นมา |
 | GET | `/auth/me` * | ข้อมูลตัวเอง |
 
 สมัครเสร็จต้องยิง `/auth/login` ต่อเพื่อเอา token — สมัครกับล็อกอินเป็นคนละเรื่อง
+
+### Session
+
+**access token อายุ 15 นาที** (`JWT_ACCESS_TTL`) เพราะเป็น JWT ที่เพิกถอนไม่ได้ —
+ออกไปแล้วก็ใช้ได้จนหมดอายุ ต่อให้เจ้าของกด logout แล้วก็ตาม เลยตั้งให้สั้น
+
+**refresh token อายุ 7 วัน** (`JWT_REFRESH_TTL`) เก็บเป็นแถวใน DB จึงเพิกถอนได้จริง
+เก็บแค่ SHA-256 ของตัว token ไม่เก็บของดิบ — DB หลุดแล้วเอาไป login ต่อไม่ได้
+(ใช้ SHA-256 ไม่ใช่ bcrypt เพราะ token สุ่มมา 256 bit ไม่มีอะไรให้เดา และต้องหาแถวด้วย hash ตรงๆ)
+
+**หมุนทุกครั้งที่ refresh** — ยิง `/auth/refresh` แล้วใบเก่าถูกเพิกถอนทันที ได้ใบใหม่มาแทน
+ทั้งหมดอยู่ใน transaction เดียว
+
+**จับ token ที่ถูกใช้ซ้ำ** — ถ้ามีคนเอาใบที่เพิกถอนไปแล้วมายิงอีก แปลว่ามีคนถืออยู่สองมือ
+ระบบจะ **ตัดทุก session ของ user คนนั้นทิ้ง** แล้วบังคับให้ login ใหม่ทั้งหมด
+เป็นราคาที่ยอมจ่ายเพื่อไม่ให้คนที่ขโมย token ไปอยู่ในระบบต่อได้เงียบๆ
+
+### Rate limit
+
+`POST /auth/login` กับ `POST /auth/register` จำกัด **10 request/นาที/IP**
+(`RATE_LIMIT_AUTH_PER_MINUTE` — ใส่ `0` คือปิด) เกินแล้วได้ **429** ในรูป envelope เดียวกับที่อื่น
+
+ไม่ครอบ `/auth/refresh` เพราะ token สุ่ม 256 bit เดาไม่ได้อยู่แล้ว และ client ปกติยิง refresh
+บ่อยกว่า login มาก จำกัดไปด้วยจะพังการใช้งานจริงเปล่าๆ
+
+เก็บสถานะไว้ในหน่วยความจำของ process — พอสำหรับ instance เดียว **ถ้าขยายเป็นหลาย replica
+ต้องย้ายไปเก็บที่ส่วนกลาง (Redis)** ไม่งั้นโควตาจะคูณตามจำนวน pod
 
 กติกา validate: `name` 2–100, `email` ต้องเป็น email, `password` **8–72 ตัว**
 (72 เพราะ bcrypt กินได้แค่ 72 bytes เกินกว่านั้นมันตัดทิ้งเงียบๆ), `title` 1–200, `content` ห้ามว่าง
@@ -356,6 +388,7 @@ npx newman run postman/blog-user-api.postman_collection.json
 | 403 | login แล้ว แต่ไม่ใช่เจ้าของ |
 | 404 | ไม่เจอข้อมูล |
 | 409 | email ซ้ำ |
+| 429 | ยิงถี่เกินโควตาของ login/register |
 | 422 | JSON ถูก แต่ validate ไม่ผ่าน |
 | 500 | พังฝั่ง server (ไม่คาย error จริงออก เอา `request_id` ไปตามใน log แทน) |
 

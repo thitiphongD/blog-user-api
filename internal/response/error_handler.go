@@ -41,6 +41,8 @@ func writeMapped(err error, c echo.Context) error {
 		return Unauthorized(c, "Invalid email or password")
 	case errors.Is(err, apperr.ErrUnauthorized):
 		return Unauthorized(c, "Unauthorized")
+	case errors.Is(err, apperr.ErrInvalidRefresh):
+		return Unauthorized(c, "Invalid or expired refresh token")
 	case errors.Is(err, apperr.ErrForbidden):
 		return Forbidden(c, "Permission denied")
 	}
@@ -75,6 +77,9 @@ func writeEchoError(httpErr *echo.HTTPError, c echo.Context) error {
 		return BadRequest(c, message)
 	case http.StatusUnauthorized:
 		return Unauthorized(c, message)
+	case http.StatusTooManyRequests:
+		// echo คืน 429 มาจาก rate limiter — ถ้าไม่ดักตรงนี้จะตกไป default แล้วกลายเป็น 500
+		return TooManyRequests(c, "Too many requests, please try again later")
 	default:
 		return InternalServerError(c)
 	}

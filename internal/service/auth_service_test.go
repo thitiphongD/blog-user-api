@@ -19,6 +19,14 @@ func testJWT() *auth.JWT {
 	return auth.NewJWT("test-secret", time.Hour)
 }
 
+func loginReq(password string) request.LoginRequest {
+	return request.LoginRequest{Email: "daew@example.com", Password: password}
+}
+
+func newAuthService(users UserRepository, refresh RefreshTokenRepository) *AuthService {
+	return NewAuthService(users, refresh, &fakeTx{}, testJWT(), 7*24*time.Hour)
+}
+
 func TestRegisterHashesPassword(t *testing.T) {
 	var saved *model.User
 
@@ -29,7 +37,7 @@ func TestRegisterHashesPassword(t *testing.T) {
 		},
 	}
 
-	user, err := NewAuthService(repo, testJWT()).Register(context.Background(), request.RegisterRequest{
+	user, err := newAuthService(repo, &mockRefreshRepo{}).Register(context.Background(), request.RegisterRequest{
 		Name:     "Daew",
 		Email:    "daew@example.com",
 		Password: "password123",
@@ -54,7 +62,7 @@ func TestRegisterPropagatesEmailTaken(t *testing.T) {
 		create: func(context.Context, *model.User) error { return apperr.ErrEmailTaken },
 	}
 
-	_, err := NewAuthService(repo, testJWT()).Register(context.Background(), request.RegisterRequest{
+	_, err := newAuthService(repo, &mockRefreshRepo{}).Register(context.Background(), request.RegisterRequest{
 		Name: "Daew", Email: "daew@example.com", Password: "password123",
 	})
 
@@ -77,8 +85,9 @@ func TestLoginSuccess(t *testing.T) {
 	}
 
 	jwt := testJWT()
+	svc := NewAuthService(repo, &mockRefreshRepo{}, &fakeTx{}, jwt, 7*24*time.Hour)
 
-	result, err := NewAuthService(repo, jwt).Login(context.Background(), request.LoginRequest{
+	result, err := svc.Login(context.Background(), request.LoginRequest{
 		Email: "daew@example.com", Password: "password123",
 	})
 	if err != nil {
@@ -107,7 +116,7 @@ func TestLoginUnknownEmailHidesNotFound(t *testing.T) {
 		},
 	}
 
-	_, err := NewAuthService(repo, testJWT()).Login(context.Background(), request.LoginRequest{
+	_, err := newAuthService(repo, &mockRefreshRepo{}).Login(context.Background(), request.LoginRequest{
 		Email: "nobody@example.com", Password: "password123",
 	})
 
@@ -131,7 +140,7 @@ func TestLoginWrongPassword(t *testing.T) {
 		},
 	}
 
-	_, err = NewAuthService(repo, testJWT()).Login(context.Background(), request.LoginRequest{
+	_, err = newAuthService(repo, &mockRefreshRepo{}).Login(context.Background(), request.LoginRequest{
 		Email: "daew@example.com", Password: "wrong-password",
 	})
 
@@ -148,7 +157,7 @@ func TestGetMe(t *testing.T) {
 		},
 	}
 
-	user, err := NewAuthService(repo, testJWT()).GetMe(context.Background(), id)
+	user, err := newAuthService(repo, &mockRefreshRepo{}).GetMe(context.Background(), id)
 	if err != nil {
 		t.Fatalf("get me: %v", err)
 	}
@@ -164,7 +173,7 @@ func TestGetMePropagatesNotFound(t *testing.T) {
 		},
 	}
 
-	_, err := NewAuthService(repo, testJWT()).GetMe(context.Background(), uuid.New())
+	_, err := newAuthService(repo, &mockRefreshRepo{}).GetMe(context.Background(), uuid.New())
 	if !errors.Is(err, apperr.ErrNotFound) {
 		t.Fatalf("อยากได้ ErrNotFound ได้ %v", err)
 	}
@@ -181,7 +190,7 @@ func TestRegisterStopsWhenHashFails(t *testing.T) {
 		},
 	}
 
-	_, err := NewAuthService(repo, testJWT()).Register(context.Background(), request.RegisterRequest{
+	_, err := newAuthService(repo, &mockRefreshRepo{}).Register(context.Background(), request.RegisterRequest{
 		Name: "Daew", Email: "daew@example.com", Password: strings.Repeat("a", 73),
 	})
 	if err == nil {
@@ -198,7 +207,7 @@ func TestLoginPropagatesDatabaseError(t *testing.T) {
 		findByEmail: func(context.Context, string) (*model.User, error) { return nil, dbDown },
 	}
 
-	_, err := NewAuthService(repo, testJWT()).Login(context.Background(), request.LoginRequest{
+	_, err := newAuthService(repo, &mockRefreshRepo{}).Login(context.Background(), request.LoginRequest{
 		Email: "daew@example.com", Password: "password123",
 	})
 

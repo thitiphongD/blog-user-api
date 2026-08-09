@@ -76,8 +76,72 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return err
 	}
 
-	return response.SuccessWithMessage(c, "Login successfully",
-		dto.NewAuthResponse(result.Token, result.ExpiredAt, *result.User))
+	return response.SuccessWithMessage(c, "Login successfully", authResponse(result))
+}
+
+// Refresh แลก refresh token เป็นชุดใหม่ ตัวเดิมใช้ต่อไม่ได้ทันที
+//
+//	@Summary	ต่ออายุ session
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		request.RefreshRequest	true	"refresh token ที่ได้ตอน login"
+//	@Success	200		{object}	response.Body{data=dto.AuthResponse}
+//	@Failure	401		{object}	response.Body	"token ผิด หมดอายุ หรือถูกใช้ไปแล้ว"
+//	@Failure	422		{object}	response.Body
+//	@Router		/api/v1/auth/refresh [post]
+func (h *AuthHandler) Refresh(c echo.Context) error {
+	var req request.RefreshRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body")
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
+	result, err := h.auth.Refresh(c.Request().Context(), req.RefreshToken)
+	if err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(c, "Token refreshed", authResponse(result))
+}
+
+// Logout เพิกถอนเฉพาะ session ที่ยื่นมา เครื่องอื่นที่ login ค้างไว้ไม่โดนด้วย
+//
+//	@Summary	ออกจากระบบ
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		body	body		request.RefreshRequest	true	"refresh token ของ session ที่จะออก"
+//	@Success	200		{object}	response.Body
+//	@Failure	401		{object}	response.Body
+//	@Failure	422		{object}	response.Body
+//	@Router		/api/v1/auth/logout [post]
+func (h *AuthHandler) Logout(c echo.Context) error {
+	var req request.RefreshRequest
+	if err := c.Bind(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body")
+	}
+
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
+	if err := h.auth.Logout(c.Request().Context(), req.RefreshToken); err != nil {
+		return err
+	}
+
+	return response.SuccessWithMessage(c, "Logout successfully", nil)
+}
+
+func authResponse(result *service.LoginResult) dto.AuthResponse {
+	return dto.NewAuthResponse(
+		result.Token, result.ExpiredAt,
+		result.RefreshToken, result.RefreshExpiredAt,
+		*result.User,
+	)
 }
 
 // Me ข้อมูลของเจ้าของ token

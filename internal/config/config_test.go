@@ -15,6 +15,9 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("APP_PORT", "")
 	t.Setenv("DB_MAX_OPEN_CONNS", "")
 	t.Setenv("SERVER_READ_TIMEOUT", "")
+	t.Setenv("JWT_ACCESS_TTL", "")
+	t.Setenv("JWT_REFRESH_TTL", "")
+	t.Setenv("RATE_LIMIT_AUTH_PER_MINUTE", "")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -30,8 +33,14 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.ReadTimeout != 10*time.Second {
 		t.Fatalf("read timeout = %v อยากได้ default 10s", cfg.Server.ReadTimeout)
 	}
-	if cfg.JWT.Expire != 24*time.Hour {
-		t.Fatalf("jwt expire = %v อยากได้ default 24h", cfg.JWT.Expire)
+	if cfg.JWT.AccessTTL != 15*time.Minute {
+		t.Fatalf("access ttl = %v อยากได้ default 15m", cfg.JWT.AccessTTL)
+	}
+	if cfg.JWT.RefreshTTL != 7*24*time.Hour {
+		t.Fatalf("refresh ttl = %v อยากได้ default 7 วัน", cfg.JWT.RefreshTTL)
+	}
+	if cfg.RateLimit.AuthPerMinute != 10 {
+		t.Fatalf("rate limit = %d อยากได้ default 10", cfg.RateLimit.AuthPerMinute)
 	}
 }
 
@@ -49,7 +58,8 @@ func TestLoadReadsEnv(t *testing.T) {
 	t.Setenv("APP_PORT", "9999")
 	t.Setenv("DB_MAX_IDLE_CONNS", "3")
 	t.Setenv("DB_CONN_MAX_LIFETIME", "90s")
-	t.Setenv("JWT_EXPIRE_HOURS", "1")
+	t.Setenv("JWT_ACCESS_TTL", "1h")
+	t.Setenv("RATE_LIMIT_AUTH_PER_MINUTE", "3")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -65,8 +75,11 @@ func TestLoadReadsEnv(t *testing.T) {
 	if cfg.DB.ConnMaxLifetime != 90*time.Second {
 		t.Fatalf("conn max lifetime = %v", cfg.DB.ConnMaxLifetime)
 	}
-	if cfg.JWT.Expire != time.Hour {
-		t.Fatalf("jwt expire = %v", cfg.JWT.Expire)
+	if cfg.JWT.AccessTTL != time.Hour {
+		t.Fatalf("access ttl = %v", cfg.JWT.AccessTTL)
+	}
+	if cfg.RateLimit.AuthPerMinute != 3 {
+		t.Fatalf("rate limit = %d", cfg.RateLimit.AuthPerMinute)
 	}
 }
 

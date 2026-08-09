@@ -11,10 +11,11 @@ import (
 )
 
 type Config struct {
-	App    AppConfig
-	DB     DBConfig
-	Server ServerConfig
-	JWT    JWTConfig
+	App       AppConfig
+	DB        DBConfig
+	Server    ServerConfig
+	JWT       JWTConfig
+	RateLimit RateLimitConfig
 }
 
 type AppConfig struct {
@@ -42,8 +43,14 @@ type ServerConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string
-	Expire time.Duration
+	Secret     string
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+}
+
+type RateLimitConfig struct {
+	// จำนวน request ต่อนาทีต่อ IP ที่ยอมให้ยิงเข้า endpoint ฝั่ง auth
+	AuthPerMinute int
 }
 
 // Load อ่าน .env ถ้ามี (ไม่มีก็ไม่เป็นไร บน docker ใช้ env จริง) แล้วประกอบเป็น Config
@@ -74,7 +81,13 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret: os.Getenv("JWT_SECRET"),
-			Expire: time.Duration(envInt("JWT_EXPIRE_HOURS", 24)) * time.Hour,
+			// access token สั้นเพราะเพิกถอนไม่ได้ — ของที่อายุยาวคือ refresh token
+			// ซึ่งเพิกถอนได้เพราะอยู่ใน DB
+			AccessTTL:  envDuration("JWT_ACCESS_TTL", 15*time.Minute),
+			RefreshTTL: envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
+		},
+		RateLimit: RateLimitConfig{
+			AuthPerMinute: envInt("RATE_LIMIT_AUTH_PER_MINUTE", 10),
 		},
 	}
 

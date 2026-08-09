@@ -14,18 +14,37 @@ import (
 )
 
 type LoginResult struct {
-	Token     string
-	ExpiredAt time.Time
-	User      *model.User
+	Token            string
+	ExpiredAt        time.Time
+	RefreshToken     string
+	RefreshExpiredAt time.Time
+	User             *model.User
 }
 
 type AuthService struct {
-	users UserRepository
-	jwt   *auth.JWT
+	users      UserRepository
+	refresh    RefreshTokenRepository
+	tx         Transactor
+	jwt        *auth.JWT
+	refreshTTL time.Duration
+	now        func() time.Time
 }
 
-func NewAuthService(users UserRepository, jwt *auth.JWT) *AuthService {
-	return &AuthService{users: users, jwt: jwt}
+func NewAuthService(
+	users UserRepository,
+	refresh RefreshTokenRepository,
+	tx Transactor,
+	jwt *auth.JWT,
+	refreshTTL time.Duration,
+) *AuthService {
+	return &AuthService{
+		users:      users,
+		refresh:    refresh,
+		tx:         tx,
+		jwt:        jwt,
+		refreshTTL: refreshTTL,
+		now:        time.Now,
+	}
 }
 
 // Register ไม่ auto-login — อยากได้ token ก็ยิง /auth/login ต่อ
@@ -55,8 +74,10 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (*Log
 		if errors.Is(err, apperr.ErrNotFound) {
 			// เผา CPU ให้พอๆ กับกรณีเจอ user จริง ไม่งั้นวัดเวลาแล้วเดาได้ว่า email ไหนมีในระบบ
 			auth.BurnCompare(req.Password)
+
 			return nil, apperr.ErrInvalidCredential
 		}
+
 		return nil, err
 	}
 
@@ -64,14 +85,115 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (*Log
 		return nil, apperr.ErrInvalidCredential
 	}
 
+	return s.issue(ctx, user)
+}
+
+// Refresh หมุน token ทุกครั้ง — ตัวเดิมถูกเพิกถอนแล้วออกใบใหม่ให้ในธุรกรรมเดียว
+// ใครขโมย refresh token ไปใช้ จะทำให้ token ของเจ้าของกลายเป็นของใช้ไม่ได้ทันที
+// แล้วรอบต่อไปที่เจ้าของยิงมา ระบบจะจับได้ว่ามีการใช้ซ้ำ
+func (s *AuthService) Refresh(ctx context.Context, raw string) (*LoginResult, error) {
+	stored, err := s.refresh.FindByHash(ctx, auth.HashRefreshToken(raw))
+	if err != nil {
+		if errors.Is(err, apperr.ErrNotFound) {
+			return nil, apperr.ErrInvalidRefresh
+		}
+
+		return nil, err
+	}
+
+	now := s.now()
+
+	// token ที่ถูกใช้ไปแล้วโผล่มาอีก = มีคนถืออยู่สองมือ ตัดทุก session ของ user คนนี้ทิ้ง
+	if stored.RevokedAt != nil {
+		if err := s.refresh.RevokeAllForUser(ctx, stored.UserID, now); err != nil {
+			return nil, err
+		}
+
+		return nil, apperr.ErrInvalidRefresh
+	}
+
+	if !stored.Usable(now) {
+		return nil, apperr.ErrInvalidRefresh
+	}
+
+	user, err := s.users.FindByID(ctx, stored.UserID)
+	if err != nil {
+		if errors.Is(err, apperr.ErrNotFound) {
+			return nil, apperr.ErrInvalidRefresh
+		}
+
+		return nil, err
+	}
+
+	var result *LoginResult
+
+	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		if err := s.refresh.Revoke(ctx, stored.ID, now); err != nil {
+			return err
+		}
+
+		issued, err := s.issue(ctx, user)
+		if err != nil {
+			return err
+		}
+
+		result = issued
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Logout เพิกถอนเฉพาะ session ที่ยื่นมา ไม่ยุ่งกับเครื่องอื่นที่ user คนเดียวกัน login ค้างไว้
+func (s *AuthService) Logout(ctx context.Context, raw string) error {
+	stored, err := s.refresh.FindByHash(ctx, auth.HashRefreshToken(raw))
+	if err != nil {
+		if errors.Is(err, apperr.ErrNotFound) {
+			return apperr.ErrInvalidRefresh
+		}
+
+		return err
+	}
+
+	return s.refresh.Revoke(ctx, stored.ID, s.now())
+}
+
+func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User, error) {
+	return s.users.FindByID(ctx, userID)
+}
+
+// issue ออก access token คู่กับ refresh token ใบใหม่ — เก็บลง DB แค่ hash
+func (s *AuthService) issue(ctx context.Context, user *model.User) (*LoginResult, error) {
 	token, expiredAt, err := s.jwt.Generate(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoginResult{Token: token, ExpiredAt: expiredAt, User: user}, nil
-}
+	raw, err := auth.NewRefreshToken()
+	if err != nil {
+		return nil, err
+	}
 
-func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User, error) {
-	return s.users.FindByID(ctx, userID)
+	refreshExpiredAt := s.now().Add(s.refreshTTL)
+
+	err = s.refresh.Create(ctx, &model.RefreshToken{
+		UserID:    user.ID,
+		TokenHash: auth.HashRefreshToken(raw),
+		ExpiresAt: refreshExpiredAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &LoginResult{
+		Token:            token,
+		ExpiredAt:        expiredAt,
+		RefreshToken:     raw,
+		RefreshExpiredAt: refreshExpiredAt,
+		User:             user,
+	}, nil
 }

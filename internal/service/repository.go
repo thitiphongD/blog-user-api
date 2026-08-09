@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -18,6 +19,13 @@ type UserRepository interface {
 	FindAll(ctx context.Context, offset, limit int) ([]model.User, error)
 	Count(ctx context.Context) (int64, error)
 	Create(ctx context.Context, user *model.User) error
+}
+
+type RefreshTokenRepository interface {
+	Create(ctx context.Context, token *model.RefreshToken) error
+	FindByHash(ctx context.Context, hash string) (*model.RefreshToken, error)
+	Revoke(ctx context.Context, id uuid.UUID, at time.Time) error
+	RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error
 }
 
 type BlogRepository interface {

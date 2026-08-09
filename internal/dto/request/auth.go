@@ -13,3 +13,8 @@ type LoginRequest struct {
 	// ไม่กั้นแล้วรหัสยาว 72 ตัวจะยอมรับส่วนท้ายอะไรต่อก็ได้
 	Password string `json:"password" validate:"required,max=72"`
 }
+
+// RefreshRequest ใช้ทั้ง /auth/refresh และ /auth/logout — ทั้งคู่ต้องการ refresh token ตัวเดียวกัน
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
