@@ -394,6 +394,10 @@ Service layer ทดสอบด้วย mock repository เขียนมื�
 ownership ของ update/delete, transaction ของ create, pagination clamp, sort/order whitelist,
 การคำนวณ `total_page`
 
+`health` มีเทสต์แยกที่ยิงผ่าน `httptest` จริง คุมสามอย่าง: ตอบ 200 พร้อม envelope ครบ,
+**ping DB จริงด้วย context ของ request** (ไม่ใช่ตอบ 200 ลอยๆ ไม่งั้น docker healthcheck
+ก็ไร้ความหมาย) และตอน DB ล่มต้องเป็น 500 ที่**ไม่คาย error จริงออก response**
+
 ## Lint
 
 ```bash

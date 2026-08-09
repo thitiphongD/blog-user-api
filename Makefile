@@ -55,7 +55,7 @@ test-race: ## รันเทสต์พร้อม race detector (อัน�
 
 .PHONY: cover
 cover: ## ดู coverage เฉพาะ package ที่มีเทสต์
-	go test -cover ./internal/service/... ./internal/dto/... ./internal/response/...
+	go test -cover ./internal/service/... ./internal/dto/... ./internal/response/... ./internal/handler/...
 
 .PHONY: lint
 lint: ## golangci-lint
