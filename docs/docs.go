@@ -687,7 +687,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
-                    "type": "string"
+                    "description": "max=72 ฝั่ง login ด้วย เพราะ bcrypt.CompareHashAndPassword ยังตัดที่ 72 bytes อยู่\nไม่กั้นแล้วรหัสยาว 72 ตัวจะยอมรับส่วนท้ายอะไรต่อก็ได้",
+                    "type": "string",
+                    "maxLength": 72
                 }
             }
         },

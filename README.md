@@ -380,10 +380,23 @@ level ผูกกับ status: 5xx = ERROR, 4xx = WARN, ที่เหลื�
 ## Test
 
 ```bash
-go test ./...
-go test -race ./...
-go test -cover ./internal/service/...
+make test              # unit ทั้งหมด ไม่ต้องมี DB
+make test-race         # อันเดียวกับที่ CI รัน
+make cover             # coverage รายชั้น
+make test-integration  # ยิง postgres จริง (ยก container ให้เอง)
 ```
+
+| ชั้น | coverage |
+|---|---|
+| `config` / `dto/request` / `logging` / `model` | 100% |
+| `middleware` | 94.6% |
+| `auth` | 89.3% |
+| `response` | 81.0% |
+| `validator` | 81.2% |
+| `handler` | 70.7% |
+| `service` | 56.4% |
+
+`repository` ไม่มี unit test เพราะ mock พิสูจน์ SQL แทนไม่ได้ — ดูหัวข้อ integration test ข้างล่าง
 
 Service layer ทดสอบด้วย mock repository เขียนมือ (เพราะ service ผูก interface) ไม่ต้องมี DB
 ไม่ต้องลง mock generator เพิ่ม — mock เป็น struct ที่มี func field ธรรมดา method ไหนไม่ได้เซ็ต
@@ -413,6 +426,27 @@ handler return
 - error ที่ไม่ได้ตั้งใจ → 500 ที่ไม่คายรายละเอียดออก response
 - `health` ping DB จริงด้วย context ของ request ไม่ใช่ตอบ 200 ลอยๆ
 
+### Integration test (ต้องมี postgres จริง)
+
+```bash
+make test-integration
+```
+
+`internal/repository` ใช้ build tag `integration` เลยไม่ปนกับ `make test` ปกติ — ที่นี่พิสูจน์
+ของที่ mock พิสูจน์แทนไม่ได้ เพราะมันคือพฤติกรรมของ SQL/GORM เอง:
+
+- **email ซ้ำ → `ErrEmailTaken`** ซึ่งพึ่ง `TranslateError: true` ใน `database.Connect`
+  ใครลบบรรทัดนั้นเมื่อไหร่ 409 จะกลายเป็น 500 เงียบๆ — เทสต์นี้เป็นอย่างเดียวที่จับได้
+- **soft delete จริง** — ลบแล้วหายจาก `FindByID` / `FindAll` / `Count` แต่แถวยังอยู่ใน DB
+- `Update` เขียนแค่ title/content — เปลี่ยนเจ้าของผ่านทางนี้ไม่ได้
+- `ILIKE` ไม่สนตัวพิมพ์ และ `Count` กับ `FindAll` ใช้ where ก้อนเดียวกัน (ไม่งั้น pagination เพี้ยน)
+- `ORDER BY` ทุกคู่ของ sort/order, offset/limit
+- `Preload` author มาจริง
+- **transaction rollback จริง** และเขียนแล้วอ่านกลับใน tx เดียวกันเห็นของที่เพิ่งเขียน
+
+migration ที่รันในเทสต์คือไฟล์จริงใน `internal/migrate/migrations` — schema ที่เทสต์วิ่งบน
+เป็นอันเดียวกับที่ deploy
+
 ## Lint
 
 ```bash
@@ -437,9 +471,12 @@ config อยู่ที่ `.golangci.yml` (schema v2) เปิดไว้�
 
 ## CI
 
-`.github/workflows/ci.yml` รัน build / vet / `go test -race` / golangci-lint
-แล้วเช็คด้วยว่า `docs/` ที่ commit ไว้ยังตรงกับ annotation ในโค้ด — แก้ handler แล้วลืม
-`swag init` จะ fail ตรงนั้น
+`.github/workflows/ci.yml` มี 3 job:
+
+- **test** — build / vet / `go test -race` + เช็คว่า `docs/` ที่ commit ไว้ยังตรงกับ
+  annotation ในโค้ด (แก้ handler แล้วลืม `swag init` จะ fail ตรงนี้)
+- **integration** — ยก postgres เป็น service แล้วรันเทสต์ที่ติด tag `integration`
+- **lint** — golangci-lint
 
 ## Docs
 

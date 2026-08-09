@@ -2,6 +2,9 @@ version: "2"
 
 run:
   timeout: 5m
+  # ไม่ใส่แล้ว lint มองไม่เห็นไฟล์ที่มี //go:build integration เลย
+  build-tags:
+    - integration
 
 linters:
   default: standard

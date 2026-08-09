@@ -18,6 +18,10 @@ definitions:
       email:
         type: string
       password:
+        description: |-
+          max=72 ฝั่ง login ด้วย เพราะ bcrypt.CompareHashAndPassword ยังตัดที่ 72 bytes อยู่
+          ไม่กั้นแล้วรหัสยาว 72 ตัวจะยอมรับส่วนท้ายอะไรต่อก็ได้
+        maxLength: 72
         type: string
     required:
     - email

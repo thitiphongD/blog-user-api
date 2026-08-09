@@ -100,10 +100,11 @@ func (r *BlogRepository) Create(ctx context.Context, blog *model.Blog) error {
 	return nil
 }
 
+// Update เขียนเฉพาะ title/content — ส่ง map ไม่ใช่ struct เพราะ Updates(struct)
+// จะเขียนทุก field ที่ไม่ใช่ zero value ลงไปด้วย รวมถึง user_id ซึ่งไม่ควรเปลี่ยนได้ทางนี้
 func (r *BlogRepository) Update(ctx context.Context, blog *model.Blog) error {
 	err := conn(ctx, r.db).
 		Model(blog).
-		Select("title", "content").
 		Updates(map[string]any{"title": blog.Title, "content": blog.Content}).Error
 	if err != nil {
 		return fmt.Errorf("update blog: %w", err)

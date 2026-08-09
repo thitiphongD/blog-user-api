@@ -35,6 +35,37 @@ jobs:
             exit 1
           }
 
+  integration:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blog_user_api_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # เทสต์ชุดนี้พิสูจน์พฤติกรรมของ SQL/GORM จริง (soft delete, unique violation,
+      # ILIKE, ORDER BY, transaction rollback) ซึ่ง mock พิสูจน์แทนไม่ได้
+      - name: Integration test
+        run: go test -tags integration -count=1 ./internal/repository/...
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -3,7 +3,8 @@ GOLANGCI_VERSION := v2.12.2
 SWAG_VERSION     := v1.16.4
 AIR_VERSION      := latest
 
-MIGRATIONS := internal/migrate/migrations
+MIGRATIONS   := internal/migrate/migrations
+TEST_DB_NAME ?= blog_user_api_test
 GOBIN      := $(shell go env GOPATH)/bin
 
 # อ่าน .env ถ้ามี — target ฝั่ง db ใช้ค่าพวกนี้ประกอบ DB_URL
@@ -53,9 +54,20 @@ test: ## รันเทสต์
 test-race: ## รันเทสต์พร้อม race detector (อันเดียวกับที่ CI รัน)
 	go test -race ./...
 
+.PHONY: test-integration
+test-integration: ## เทสต์ repository กับ postgres จริง (ยก postgres ให้เอง)
+	@docker compose up -d postgres >/dev/null
+	@until docker compose exec -T postgres pg_isready -U $(DB_USER) >/dev/null 2>&1; do sleep 1; done
+	@docker compose exec -T postgres psql -U $(DB_USER) -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'" | grep -q 1 \
+		|| docker compose exec -T postgres createdb -U $(DB_USER) $(TEST_DB_NAME)
+	TEST_DB_NAME=$(TEST_DB_NAME) go test -tags integration -count=1 ./internal/repository/...
+
 .PHONY: cover
 cover: ## ดู coverage เฉพาะ package ที่มีเทสต์
-	go test -cover ./internal/service/... ./internal/dto/request/... ./internal/response/... ./internal/handler/...
+	go test -cover ./internal/auth/... ./internal/config/... ./internal/dto/request/... \
+		./internal/handler/... ./internal/logging/... ./internal/middleware/... \
+		./internal/model/... ./internal/response/... ./internal/service/... ./internal/validator/...
 
 .PHONY: lint
 lint: ## golangci-lint
