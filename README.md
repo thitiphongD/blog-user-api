@@ -85,7 +85,8 @@ directory ของ package ตัวเองไม่ได้ ถ้าวา
 APP_PORT=8080
 APP_ENV=development
 
-DB_HOST=localhost          # docker compose override เป็น postgres ให้เอง
+# docker compose override เป็น postgres ให้เอง
+DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
@@ -110,6 +111,8 @@ JWT_EXPIRE_HOURS=24
   ไม่งั้นโหมด local จะต่อไม่ติด
 - pool กับ timeout ไม่ใช่ของเสริม — `database/sql` default คือ open conns ไม่จำกัด และ
   `http.Server` ที่ไม่ตั้ง timeout คือเปิดรับ slowloris
+- comment ในไฟล์นี้ต้องอยู่บรรทัดของตัวเอง อย่าเขียนต่อท้ายค่า — `Makefile` include
+  ไฟล์นี้ไปใช้ประกอบ `DB_URL` ค่าจะติดขยะเอา
 
 ## Installation
 
@@ -118,9 +121,26 @@ JWT_EXPIRE_HOURS=24
 ```bash
 git clone https://github.com/thitiphongD/blog-user-api.git
 cd blog-user-api
-cp .env.example .env
-go mod download
+make setup     # ก๊อป .env + go mod download
+make tools     # ลง golangci-lint / swag / migrate / air ตามเวอร์ชันที่ปักไว้
 ```
+
+## Makefile
+
+คำสั่งทั้งหมดในเอกสารนี้มีทางลัดใน `Makefile` — `make` เฉยๆ จะโชว์ทั้งหมด
+
+| คำสั่ง | ทำอะไร |
+|---|---|
+| `make up` / `make down` / `make clean` | ยก stack / หยุด / หยุด+ล้าง volume |
+| `make logs` / `make ps` / `make psql` | ดู log / สถานะ / เข้า psql |
+| `make dev` | รันบนเครื่องแบบ hot reload |
+| `make test` / `make test-race` / `make cover` | เทสต์ |
+| `make lint` / `make swag` | lint / gen swagger |
+| `make smoke` | ยิง Postman collection ด้วย newman |
+| `make migrate-create NAME=x` | สร้าง migration ใหม่ |
+| **`make ci`** | **รันทุกอย่างที่ CI รัน — ผ่านอันนี้ก่อนค่อย push** |
+
+เวอร์ชันเครื่องมือปักไว้ใน `Makefile` ให้ตรงกับ CI จะได้ไม่เจอ "เครื่องผมผ่านนะ"
 
 ## Run
 
