@@ -172,6 +172,12 @@ func (s *AuthService) Logout(ctx context.Context, raw string) error {
 	return nil
 }
 
+// PruneExpiredTokens กวาด refresh token ที่หมดอายุแล้วทิ้ง คืนจำนวนแถวที่ลบ
+// ไม่มีใครยิงผ่าน HTTP — main เรียกเป็นระยะเอง
+func (s *AuthService) PruneExpiredTokens(ctx context.Context) (int64, error) {
+	return s.refresh.DeleteExpired(ctx, s.now())
+}
+
 func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User, error) {
 	return s.users.FindByID(ctx, userID)
 }

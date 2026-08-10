@@ -26,6 +26,7 @@ type RefreshTokenRepository interface {
 	FindByHash(ctx context.Context, hash string) (*model.RefreshToken, error)
 	Revoke(ctx context.Context, id uuid.UUID, at time.Time) error
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error
+	DeleteExpired(ctx context.Context, before time.Time) (int64, error)
 }
 
 type CommentRepository interface {

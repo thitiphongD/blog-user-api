@@ -35,6 +35,7 @@ func (r *CommentRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.
 }
 
 // FindAllByBlog เรียงเก่าไปใหม่ ต่างจาก blog ที่เรียงใหม่ไปเก่า — บทสนทนาต้องอ่านไล่จากบนลงล่าง
+// ต่อ id ปิดท้ายให้ลำดับนิ่งเวลา created_at ซ้ำกัน ไม่งั้นไล่ page แล้วแถวหลุด/ซ้ำได้
 func (r *CommentRepository) FindAllByBlog(
 	ctx context.Context,
 	blogID uuid.UUID,
@@ -45,7 +46,7 @@ func (r *CommentRepository) FindAllByBlog(
 	err := conn(ctx, r.db).
 		Preload("User").
 		Where("blog_id = ?", blogID).
-		Order("created_at ASC").
+		Order("created_at ASC, id").
 		Offset(offset).
 		Limit(limit).
 		Find(&comments).Error

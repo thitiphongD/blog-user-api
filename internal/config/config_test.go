@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -120,5 +121,38 @@ func TestDSNAndURL(t *testing.T) {
 	want := "postgres://u:p@postgres:5432/blog?sslmode=disable"
 	if got := db.URL(); got != want {
 		t.Fatalf("URL = %s อยากได้ %s", got, want)
+	}
+}
+
+func TestCORSAllowedOrigins(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want []string
+	}{
+		{"ไม่ตั้งค่า = เปิดหมด", "", []string{"*"}},
+		{"ตัวเดียว", "https://blog.example.com", []string{"https://blog.example.com"}},
+		{
+			"หลายตัว เว้นวรรคมั่วก็ต้องได้",
+			"https://a.example.com , https://b.example.com",
+			[]string{"https://a.example.com", "https://b.example.com"},
+		},
+		{"ตัวว่างคั่นกลางต้องถูกตัดทิ้ง", "https://a.example.com,,", []string{"https://a.example.com"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", "secret")
+			t.Setenv("CORS_ALLOWED_ORIGINS", tc.env)
+
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+
+			if !slices.Equal(cfg.CORS.AllowedOrigins, tc.want) {
+				t.Fatalf("ได้ %v อยากได้ %v", cfg.CORS.AllowedOrigins, tc.want)
+			}
+		})
 	}
 }

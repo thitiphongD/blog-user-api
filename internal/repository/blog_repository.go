@@ -78,6 +78,10 @@ func (r *BlogRepository) filtered(ctx context.Context, f model.BlogFilter) *gorm
 }
 
 // orderClause ประกอบจาก constant ที่ผ่าน whitelist แล้วเท่านั้น ไม่เอา string จาก query มาต่อตรงๆ
+//
+// ต่อ id ปิดท้ายเสมอเพื่อให้ลำดับนิ่ง — ค่าที่ซ้ำกัน (title โหลๆ หรือ created_at ที่เท่ากัน
+// เพราะ insert รวดเดียว) postgres คืนลำดับไม่คงที่ระหว่างหน้า แถวเลยหลุดหรือโผล่ซ้ำได้
+// ตอนไล่ page ตัว id เป็น UUID ลำดับเลยไม่มีความหมายอะไร ขอแค่คงที่ก็พอ
 func orderClause(f model.BlogFilter) string {
 	column := model.SortCreatedAt
 	if f.Sort == model.SortTitle {
@@ -89,7 +93,7 @@ func orderClause(f model.BlogFilter) string {
 		direction = "ASC"
 	}
 
-	return column + " " + direction
+	return column + " " + direction + ", id"
 }
 
 func (r *BlogRepository) Create(ctx context.Context, blog *model.Blog) error {

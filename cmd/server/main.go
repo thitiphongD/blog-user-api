@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
@@ -74,7 +75,8 @@ func run() error {
 	}
 	slog.Info("migration up to date")
 
-	e := newEcho(cfg, db, sqlDB)
+	e, authService := newEcho(cfg, db, sqlDB)
+	startTokenPruner(ctx, authService, cfg.JWT.RefreshPruneInterval)
 
 	go func() {
 		if err := e.Start(":" + cfg.App.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -99,7 +101,7 @@ func run() error {
 	return nil
 }
 
-func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo {
+func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) (*echo.Echo, *service.AuthService) {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -123,7 +125,16 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 	e.Use(middleware.RequestContext())
 	e.Use(middleware.Logger())
 	e.Use(echomw.Recover())
-	e.Use(echomw.CORS())
+
+	// echomw.CORS() เปล่าๆ = AllowOrigins ["*"] ตายตัว ให้ตั้งผ่าน env แทน
+	// token อยู่ใน header ไม่ใช่ cookie ความเสี่ยงเลยไม่สูงเท่าเคสที่ใช้ cookie
+	// แต่ปล่อยเปิดหมดตอน deploy จริงไม่มีเหตุผลรองรับ
+	if slices.Contains(cfg.CORS.AllowedOrigins, "*") {
+		slog.Warn("CORS เปิดให้ทุก origin — ตั้ง CORS_ALLOWED_ORIGINS ก่อน deploy จริง",
+			"env", cfg.App.Env)
+	}
+
+	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{AllowOrigins: cfg.CORS.AllowedOrigins}))
 
 	jwt := auth.NewJWT(cfg.JWT.Secret, cfg.JWT.AccessTTL)
 
@@ -145,5 +156,38 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 		Comment:                handler.NewCommentHandler(service.NewCommentService(commentRepo, blogRepo, tx)),
 	})
 
-	return e
+	return e, authService
+}
+
+// startTokenPruner กวาด refresh token ที่หมดอายุทิ้งเป็นระยะ — ตารางนี้ได้แถวใหม่ทุกครั้ง
+// ที่มีคน login หรือ refresh และไม่มีอะไรลบให้ ปล่อยไว้คือโตไปเรื่อยๆ ไม่มีเพดาน
+// ctx ตัวเดียวกับที่ใช้คุม shutdown ปิดเครื่องเมื่อไหร่ก็จบตาม
+func startTokenPruner(ctx context.Context, auth *service.AuthService, every time.Duration) {
+	if every <= 0 {
+		slog.Info("ปิดการกวาด refresh token ที่หมดอายุ")
+
+		return
+	}
+
+	go func() {
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				deleted, err := auth.PruneExpiredTokens(ctx)
+				if err != nil {
+					slog.Error("กวาด refresh token ไม่สำเร็จ", "error", err)
+
+					continue
+				}
+				if deleted > 0 {
+					slog.Info("กวาด refresh token ที่หมดอายุแล้ว", "deleted", deleted)
+				}
+			}
+		}
+	}()
 }

@@ -112,6 +112,7 @@ type mockRefreshRepo struct {
 	findByHash       func(ctx context.Context, hash string) (*model.RefreshToken, error)
 	revoke           func(ctx context.Context, id uuid.UUID, at time.Time) error
 	revokeAllForUser func(ctx context.Context, userID uuid.UUID, at time.Time) error
+	deleteExpired    func(ctx context.Context, before time.Time) (int64, error)
 }
 
 func (m *mockRefreshRepo) Create(ctx context.Context, token *model.RefreshToken) error {
@@ -136,6 +137,14 @@ func (m *mockRefreshRepo) Revoke(ctx context.Context, id uuid.UUID, at time.Time
 	}
 
 	return m.revoke(ctx, id, at)
+}
+
+func (m *mockRefreshRepo) DeleteExpired(ctx context.Context, before time.Time) (int64, error) {
+	if m.deleteExpired == nil {
+		panic("unexpected call: DeleteExpired")
+	}
+
+	return m.deleteExpired(ctx, before)
 }
 
 func (m *mockRefreshRepo) RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error {

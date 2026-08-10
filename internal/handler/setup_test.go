@@ -209,16 +209,38 @@ func (m *fakeRefreshRepo) FindByHash(_ context.Context, hash string) (*model.Ref
 	return nil, apperr.NotFound("Refresh token")
 }
 
+// Revoke เลียนแบบ WHERE revoked_at IS NULL ของจริง — ใบที่ถูกเพิกถอนไปแล้วต้องตีกลับ
+// ไม่ใช่คืน nil เฉยๆ ไม่งั้น fake จะโกหกว่า race ที่ repository จริงกันไว้ให้นั้นเกิดไม่ได้
 func (m *fakeRefreshRepo) Revoke(_ context.Context, id uuid.UUID, at time.Time) error {
-	m.revoked = append(m.revoked, id)
-
 	for _, token := range m.tokens {
-		if token.ID == id {
-			token.RevokedAt = &at
+		if token.ID != id {
+			continue
+		}
+
+		if token.RevokedAt != nil {
+			return apperr.ErrInvalidRefresh
+		}
+
+		token.RevokedAt = &at
+		m.revoked = append(m.revoked, id)
+
+		return nil
+	}
+
+	return apperr.ErrInvalidRefresh
+}
+
+func (m *fakeRefreshRepo) DeleteExpired(_ context.Context, before time.Time) (int64, error) {
+	var deleted int64
+
+	for hash, token := range m.tokens {
+		if token.ExpiresAt.Before(before) {
+			delete(m.tokens, hash)
+			deleted++
 		}
 	}
 
-	return nil
+	return deleted, nil
 }
 
 func (m *fakeRefreshRepo) RevokeAllForUser(_ context.Context, userID uuid.UUID, at time.Time) error {

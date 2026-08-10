@@ -215,3 +215,43 @@ func TestRevokeConcurrentOnlyOneWins(t *testing.T) {
 		t.Fatalf("ต้องมีตัวชนะตัวเดียว แต่ชนะ %d ตัว", won)
 	}
 }
+
+// กวาดของหมดอายุต้องไม่แตะใบที่ยังไม่หมดอายุ ถึงจะถูกเพิกถอนไปแล้วก็ตาม —
+// ใบที่เพิกถอนแล้วแต่ยังไม่หมดอายุคือของที่ใช้จับการเอา token ไปใช้ซ้ำ ลบทิ้งแล้ว reuse detection ตาบอด
+func TestDeleteExpiredKeepsRevokedButLiveTokens(t *testing.T) {
+	reset(t)
+	user := newUser(t, "daew@example.com")
+	repo := repository.NewRefreshTokenRepository(testDB)
+	now := time.Now()
+
+	expired := &model.RefreshToken{
+		UserID: user.ID, TokenHash: "หมดอายุแล้ว", ExpiresAt: now.Add(-time.Hour),
+	}
+	if err := repo.Create(t.Context(), expired); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	revokedButLive := newRefreshToken(t, user.ID, "เพิกถอนแล้วแต่ยังไม่หมดอายุ")
+	if err := repo.Revoke(t.Context(), revokedButLive.ID, now); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	newRefreshToken(t, user.ID, "ยังใช้ได้")
+
+	deleted, err := repo.DeleteExpired(t.Context(), now)
+	if err != nil {
+		t.Fatalf("delete expired: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("ลบไป %d แถว อยากได้ 1", deleted)
+	}
+
+	if _, err := repo.FindByHash(t.Context(), "หมดอายุแล้ว"); !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatalf("ใบที่หมดอายุยังอยู่: %v", err)
+	}
+	for _, hash := range []string{"เพิกถอนแล้วแต่ยังไม่หมดอายุ", "ยังใช้ได้"} {
+		if _, err := repo.FindByHash(t.Context(), hash); err != nil {
+			t.Fatalf("%s ถูกลบไปด้วย: %v", hash, err)
+		}
+	}
+}

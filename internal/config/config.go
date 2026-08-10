@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,6 +17,7 @@ type Config struct {
 	Server    ServerConfig
 	JWT       JWTConfig
 	RateLimit RateLimitConfig
+	CORS      CORSConfig
 }
 
 type AppConfig struct {
@@ -46,6 +48,13 @@ type JWTConfig struct {
 	Secret     string
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
+	// RefreshPruneInterval คือทุกกี่นานจะกวาด refresh token ที่หมดอายุทิ้ง (<=0 คือไม่กวาด)
+	RefreshPruneInterval time.Duration
+}
+
+type CORSConfig struct {
+	// AllowedOrigins มี "*" ตัวเดียวคือเปิดให้ทุกเว็บ ใช้ได้ตอน dev แต่ก่อน deploy ควรระบุให้ชัด
+	AllowedOrigins []string
 }
 
 type RateLimitConfig struct {
@@ -85,9 +94,14 @@ func Load() (*Config, error) {
 			// ซึ่งเพิกถอนได้เพราะอยู่ใน DB
 			AccessTTL:  envDuration("JWT_ACCESS_TTL", 15*time.Minute),
 			RefreshTTL: envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
+			// refresh_tokens โตทุกครั้งที่ login/refresh ไม่มีใครลบให้ ต้องกวาดเอง
+			RefreshPruneInterval: envDuration("REFRESH_PRUNE_INTERVAL", time.Hour),
 		},
 		RateLimit: RateLimitConfig{
 			AuthPerMinute: envInt("RATE_LIMIT_AUTH_PER_MINUTE", 10),
+		},
+		CORS: CORSConfig{
+			AllowedOrigins: envList("CORS_ALLOWED_ORIGINS", "*"),
 		},
 	}
 
@@ -120,6 +134,20 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// envList แยกด้วย comma แล้วตัดช่องว่างกับตัวว่างทิ้ง — "a, ,b" ได้ ["a" "b"]
+func envList(key, fallback string) []string {
+	raw := env(key, fallback)
+
+	out := make([]string, 0, strings.Count(raw, ",")+1)
+	for _, part := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	return out
 }
 
 func envInt(key string, fallback int) int {

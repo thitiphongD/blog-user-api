@@ -5,6 +5,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -311,5 +312,52 @@ func TestTransactionReadsOwnWrite(t *testing.T) {
 
 	if got := allBlogs(t, repo, model.BlogFilter{}); len(got) != 1 {
 		t.Fatalf("commit แล้วแต่หาไม่เจอ: %v", titles(got))
+	}
+}
+
+// created_at ที่เท่ากันเป๊ะ (insert รวดเดียว) ต้องยังไล่ page ได้ครบไม่ซ้ำไม่ขาด —
+// ORDER BY ที่ไม่มี tiebreaker ปล่อยให้ postgres คืนลำดับตามใจ แถวเลยหลุดหรือโผล่ซ้ำได้
+func TestBlogPagingIsStableWhenSortKeyTies(t *testing.T) {
+	reset(t)
+	user := newUser(t, "daew@example.com")
+
+	same := time.Now().Truncate(time.Second)
+	for i := range 10 {
+		blog := &model.Blog{
+			Title:     "หัวข้อซ้ำกันหมด",
+			Content:   fmt.Sprintf("ก้อนที่ %d", i),
+			UserID:    user.ID,
+			CreatedAt: same,
+			UpdatedAt: same,
+		}
+		if err := testDB.Create(blog).Error; err != nil {
+			t.Fatalf("สร้าง blog: %v", err)
+		}
+	}
+
+	repo := repository.NewBlogRepository(testDB)
+	seen := map[uuid.UUID]bool{}
+
+	for page := range 5 {
+		got, err := repo.FindAll(t.Context(), model.BlogFilter{
+			Sort:   model.SortTitle,
+			Order:  model.OrderAsc,
+			Offset: page * 2,
+			Limit:  2,
+		})
+		if err != nil {
+			t.Fatalf("find all หน้า %d: %v", page, err)
+		}
+
+		for _, blog := range got {
+			if seen[blog.ID] {
+				t.Fatalf("หน้า %d เจอ blog ซ้ำ %s — ลำดับไม่นิ่ง", page, blog.ID)
+			}
+			seen[blog.ID] = true
+		}
+	}
+
+	if len(seen) != 10 {
+		t.Fatalf("ไล่ครบ 5 หน้าได้ %d แถว อยากได้ 10 — มีแถวหลุด", len(seen))
 	}
 }

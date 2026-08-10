@@ -52,8 +52,9 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.Use
 func (r *UserRepository) FindAll(ctx context.Context, offset, limit int) ([]model.User, error) {
 	var users []model.User
 
+	// ต่อ id ปิดท้ายด้วยเหตุผลเดียวกับ blog — created_at ซ้ำกันแล้วลำดับระหว่างหน้าจะไม่นิ่ง
 	err := conn(ctx, r.db).
-		Order("created_at DESC").
+		Order("created_at DESC, id").
 		Offset(offset).
 		Limit(limit).
 		Find(&users).Error

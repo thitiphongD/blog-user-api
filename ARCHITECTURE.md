@@ -27,6 +27,8 @@ PostgreSQL
 - Schema มี source of truth เดียวคือ `prisma/schema.prisma` → gen เป็น SQL ลง
   `internal/migrate/migrations/` — **GORM ห้าม `AutoMigrate`**
 - JSON กับ DB column เป็น `snake_case` ทั้งระบบ
+- **`ORDER BY` ที่ใช้คู่กับ paging ต้องมี tiebreaker เสมอ** — ต่อ `, id` ปิดท้ายทุกที่
+  ค่าที่ซ้ำกันทำให้ postgres คืนลำดับไม่คงที่ระหว่างหน้า แถวหลุดหรือโผล่ซ้ำได้
 - UUID กับ timestamp เซ็ตฝั่ง app (`uuid.New()` + GORM autoCreateTime) ไม่ใช้ DB default
 
 ## Tech Stack
@@ -201,6 +203,15 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 `/auth/logout` กลืน error ตัวนี้ทิ้งตั้งใจ — เพิกถอนไม่โดนแถวแปลว่ามีคนชิงทำไปแล้ว
 ปลายทางคือ session ตายเหมือนกัน ไม่มีเหตุผลให้ client เห็น error
 
+**กวาดของหมดอายุทิ้งเป็นระยะ** (`REFRESH_PRUNE_INTERVAL` ค่าเริ่ม `1h` ใส่ `0` คือปิด) —
+`refresh_tokens` ได้แถวใหม่ทุกครั้งที่มีคน login หรือ refresh และไม่มีอะไรลบให้
+ปล่อยไว้คือโตไม่มีเพดาน goroutine ใน `main` เรียก `PruneExpiredTokens` ตาม ticker
+ผูกกับ ctx ตัวเดียวกับ shutdown
+
+**ตัดที่ `expires_at` ไม่ใช่ `revoked_at` ตั้งใจ** — ใบที่ถูกเพิกถอนแล้วแต่ยังไม่หมดอายุ
+คือของที่ใช้จับการเอา token ไปใช้ซ้ำ ลบเร็วไปเมื่อไหร่คนขโมย token มายิงจะได้ 401 เฉยๆ
+แทนที่ระบบจะรู้ตัวแล้วตัดทุก session ทิ้ง
+
 **จับ token ที่ถูกใช้ซ้ำ** — ถ้ามีคนเอาใบที่เพิกถอนไปแล้วมายิงอีก แปลว่ามีคนถืออยู่สองมือ
 ระบบจะ **ตัดทุก session ของ user คนนั้นทิ้ง** แล้วบังคับให้ login ใหม่ทั้งหมด
 เป็นราคาที่ยอมจ่ายเพื่อไม่ให้คนที่ขโมย token ไปอยู่ในระบบต่อได้เงียบๆ
@@ -221,6 +232,14 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 header ปลอมใหม่ทุก request แล้วได้โควตาใหม่เรื่อยๆ (และปลอม `remote_ip` ใน access log ได้ด้วย)
 ตอนนี้ไม่มี proxy อยู่หน้า service วันไหนมีค่อยเปลี่ยนเป็น `ExtractIPFromXFFHeader` พร้อมระบุ
 range ที่เชื่อถือได้ — มีเทสต์ที่ `cmd/server/main_test.go` กันไว้ไม่ให้หลุดกลับไป
+
+### CORS
+
+`CORS_ALLOWED_ORIGINS` คั่นด้วย comma ค่าเริ่มคือ `*` (เปิดหมด) เพื่อให้ dev รันได้เลย —
+ตอน boot ถ้ายังเป็น `*` จะมี log warn เตือน **ก่อน deploy จริงต้องระบุ origin ให้ชัด**
+
+ความเสี่ยงไม่สูงเท่า API ที่ใช้ cookie เพราะ token อยู่ใน `Authorization` header
+เว็บอื่นต้องมี token อยู่ในมือก่อนถึงจะยิงแทนผู้ใช้ได้ แต่ไม่ใช่เหตุผลให้เปิดทิ้งไว้
 
 ### Validation
 

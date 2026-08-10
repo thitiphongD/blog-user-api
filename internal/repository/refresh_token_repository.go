@@ -66,6 +66,20 @@ func (r *RefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID, at ti
 	return nil
 }
 
+// DeleteExpired ลบทิ้งเฉพาะใบที่หมดอายุแล้ว — ตัดที่ expires_at ไม่ใช่ revoked_at ตั้งใจ
+// ใบที่ถูกเพิกถอนแล้วแต่ยังไม่หมดอายุคือของที่ใช้จับการเอา token ไปใช้ซ้ำ ลบเร็วไปเมื่อไหร่
+// คนขโมย token มายิงจะได้ 401 เฉยๆ แทนที่ระบบจะรู้ตัวแล้วตัดทุก session ทิ้ง
+//
+// hard delete จริงๆ เพราะ RefreshToken ไม่มี gorm.DeletedAt
+func (r *RefreshTokenRepository) DeleteExpired(ctx context.Context, before time.Time) (int64, error) {
+	result := conn(ctx, r.db).Where("expires_at < ?", before).Delete(&model.RefreshToken{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("delete expired refresh tokens: %w", result.Error)
+	}
+
+	return result.RowsAffected, nil
+}
+
 // RevokeAllForUser ใช้ตอนจับได้ว่ามีการเอา token ที่ใช้ไปแล้วมาใช้ซ้ำ
 // ตัดทุก session ของ user คนนั้นทิ้ง เพราะไม่รู้ว่าใครถืออันไหนอยู่บ้าง
 func (r *RefreshTokenRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID, at time.Time) error {

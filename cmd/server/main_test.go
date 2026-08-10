@@ -23,7 +23,7 @@ func testConfig() *config.Config {
 // echo จะอ่าน X-Forwarded-For ก่อน RemoteAddr = สุ่ม header ใหม่ทุก request แล้วหนีโควตาได้
 // (remote_ip ใน access log ก็ปลอมได้ด้วยเหตุผลเดียวกัน)
 func TestRealIPIgnoresSpoofableHeaders(t *testing.T) {
-	e := newEcho(testConfig(), nil, nil)
+	e, _ := newEcho(testConfig(), nil, nil)
 
 	cases := []struct {
 		name   string
