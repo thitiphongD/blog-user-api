@@ -45,12 +45,22 @@ func (r *RefreshTokenRepository) FindByHash(ctx context.Context, hash string) (*
 	return &token, nil
 }
 
+// Revoke เพิกถอนเฉพาะใบที่ยังไม่ถูกเพิกถอน — `revoked_at IS NULL` ใน WHERE ทำหน้าที่เป็น
+// compare-and-swap ให้ด้วย ไม่โดนสักแถวแปลว่ามีคนชิงเพิกถอนไปก่อนแล้ว ต้องบอกคนเรียก
+//
+// เคยคืน nil เฉยๆ ซึ่งเปิดช่องให้ refresh สองอันที่ยิงพร้อมกันด้วย token ใบเดียวผ่านทั้งคู่:
+// ทั้งคู่อ่านเจอ revoked_at เป็น null ก่อนเข้า transaction ตัวหลัง update ไม่โดนแถวไหน
+// แต่ไม่มีใครรู้ เลยออก token ใหม่ให้ทั้งคู่ = ใบเดียวแตกเป็นสองสายที่ใช้ได้จริง
 func (r *RefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID, at time.Time) error {
 	result := conn(ctx, r.db).Model(&model.RefreshToken{}).
 		Where("id = ? AND revoked_at IS NULL", id).
 		Update("revoked_at", at)
 	if result.Error != nil {
 		return fmt.Errorf("revoke refresh token: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return apperr.ErrInvalidRefresh
 	}
 
 	return nil

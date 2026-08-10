@@ -191,6 +191,16 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 **หมุนทุกครั้งที่ refresh** — ยิง `/auth/refresh` แล้วใบเก่าถูกเพิกถอนทันที ได้ใบใหม่มาแทน
 ทั้งหมดอยู่ใน transaction เดียว
 
+การหมุนพึ่ง `UPDATE ... WHERE id = ? AND revoked_at IS NULL` เป็น compare-and-swap แล้ว
+**เช็ค `RowsAffected` ด้วย** — การอ่าน token อยู่นอก transaction สองคำขอที่ถือใบเดียวกัน
+ยิงพร้อมกันจึงเห็น `revoked_at` เป็น null ได้ทั้งคู่ ถ้าปล่อยให้ update ที่ไม่โดนแถวไหน
+คืน `nil` เฉยๆ จะออก token ใหม่ให้ทั้งสองคำขอ = ใบเดียวแตกเป็นสองสายที่ใช้ได้จริง
+และ reuse detection ข้างล่างก็ไม่มีวันทำงานเพราะไม่มีใครเอาใบเก่ามายิงซ้ำ
+ตัวที่แพ้ตอนนี้ได้ 401 แล้ว transaction rollback (`TestRevokeConcurrentOnlyOneWins` ยืนยันของจริง)
+
+`/auth/logout` กลืน error ตัวนี้ทิ้งตั้งใจ — เพิกถอนไม่โดนแถวแปลว่ามีคนชิงทำไปแล้ว
+ปลายทางคือ session ตายเหมือนกัน ไม่มีเหตุผลให้ client เห็น error
+
 **จับ token ที่ถูกใช้ซ้ำ** — ถ้ามีคนเอาใบที่เพิกถอนไปแล้วมายิงอีก แปลว่ามีคนถืออยู่สองมือ
 ระบบจะ **ตัดทุก session ของ user คนนั้นทิ้ง** แล้วบังคับให้ login ใหม่ทั้งหมด
 เป็นราคาที่ยอมจ่ายเพื่อไม่ให้คนที่ขโมย token ไปอยู่ในระบบต่อได้เงียบๆ
@@ -205,6 +215,12 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 
 เก็บสถานะไว้ในหน่วยความจำของ process — พอสำหรับ instance เดียว **ถ้าขยายเป็นหลาย replica
 ต้องย้ายไปเก็บที่ส่วนกลาง (Redis)** ไม่งั้นโควตาจะคูณตามจำนวน pod
+
+คีย์ที่ใช้นับคือ `c.RealIP()` ซึ่ง **ต้องปัก `e.IPExtractor = echo.ExtractIPDirect()` ด้วย** —
+ค่า default ของ echo คืออ่าน `X-Forwarded-For` แล้วค่อยถอยไป `RemoteAddr` แปลว่าใครก็ยัด
+header ปลอมใหม่ทุก request แล้วได้โควตาใหม่เรื่อยๆ (และปลอม `remote_ip` ใน access log ได้ด้วย)
+ตอนนี้ไม่มี proxy อยู่หน้า service วันไหนมีค่อยเปลี่ยนเป็น `ExtractIPFromXFFHeader` พร้อมระบุ
+range ที่เชื่อถือได้ — มีเทสต์ที่ `cmd/server/main_test.go` กันไว้ไม่ให้หลุดกลับไป
 
 ### Validation
 

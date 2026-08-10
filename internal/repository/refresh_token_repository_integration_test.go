@@ -3,7 +3,9 @@
 package repository_test
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,8 +95,9 @@ func TestRevokedTokenIsStillFindable(t *testing.T) {
 	}
 }
 
-// เพิกถอนซ้ำต้องไม่ทับเวลาเดิม ไม่งั้น timestamp ของเหตุการณ์จริงหาย
-func TestRevokeIsIdempotent(t *testing.T) {
+// เพิกถอนซ้ำต้องไม่ทับเวลาเดิม (timestamp ของเหตุการณ์จริงต้องไม่หาย) และต้องฟ้องกลับมาว่า
+// ไม่ได้แตะแถวไหน — ตัวหลังคือสิ่งที่กันไม่ให้ refresh สองอันที่ยิงพร้อมกันผ่านทั้งคู่
+func TestRevokeTwiceKeepsFirstTimeAndReports(t *testing.T) {
 	reset(t)
 	user := newUser(t, "daew@example.com")
 	token := newRefreshToken(t, user.ID, "hash-1")
@@ -105,8 +108,8 @@ func TestRevokeIsIdempotent(t *testing.T) {
 	if err := repo.Revoke(t.Context(), token.ID, first); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if err := repo.Revoke(t.Context(), token.ID, time.Now()); err != nil {
-		t.Fatalf("revoke ซ้ำ: %v", err)
+	if err := repo.Revoke(t.Context(), token.ID, time.Now()); !errors.Is(err, apperr.ErrInvalidRefresh) {
+		t.Fatalf("revoke ซ้ำต้องได้ ErrInvalidRefresh ได้: %v", err)
 	}
 
 	found, err := repo.FindByHash(t.Context(), "hash-1")
@@ -168,5 +171,47 @@ func TestRefreshTokensDieWithUser(t *testing.T) {
 	}
 	if rows != 0 {
 		t.Fatalf("ลบ user แล้วยังเหลือ token %d แถว", rows)
+	}
+}
+
+// สองคำขอชิงเพิกถอน token ใบเดียวกันพร้อมกัน ต้องสำเร็จได้ตัวเดียว —
+// postgres ล็อกแถวให้ ตัวที่มาทีหลังจะเห็น revoked_at ไม่ null แล้ว update ไม่โดนสักแถว
+// นี่คือของที่กันไม่ให้ refresh ใบเดียวแตกเป็นสองสาย เลยต้องมีเทสต์ยืนยันของจริง
+func TestRevokeConcurrentOnlyOneWins(t *testing.T) {
+	reset(t)
+	user := newUser(t, "daew@example.com")
+	token := newRefreshToken(t, user.ID, "hash-race")
+
+	repo := repository.NewRefreshTokenRepository(testDB)
+	now := time.Now()
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+
+	for i := range errs {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			errs[i] = repo.Revoke(context.Background(), token.ID, now)
+		}()
+	}
+
+	wg.Wait()
+
+	won := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			won++
+		case errors.Is(err, apperr.ErrInvalidRefresh):
+		default:
+			t.Fatalf("error ที่ไม่ได้คาดไว้: %v", err)
+		}
+	}
+
+	if won != 1 {
+		t.Fatalf("ต้องมีตัวชนะตัวเดียว แต่ชนะ %d ตัว", won)
 	}
 }

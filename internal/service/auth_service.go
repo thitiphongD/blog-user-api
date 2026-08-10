@@ -128,6 +128,9 @@ func (s *AuthService) Refresh(ctx context.Context, raw string) (*LoginResult, er
 	var result *LoginResult
 
 	err = s.tx.Do(ctx, func(ctx context.Context) error {
+		// การอ่านข้างบนอยู่นอก transaction สองคำขอที่ถือ token ใบเดียวกันเลยเห็น
+		// revoked_at เป็น null ได้ทั้งคู่ ตัวที่แพ้จะโดน Revoke ตีกลับเป็น ErrInvalidRefresh
+		// แล้ว transaction ทั้งก้อน rollback — ไม่มีทางออก token ใหม่สองใบจากใบเดียว
 		if err := s.refresh.Revoke(ctx, stored.ID, now); err != nil {
 			return err
 		}
@@ -159,7 +162,14 @@ func (s *AuthService) Logout(ctx context.Context, raw string) error {
 		return err
 	}
 
-	return s.refresh.Revoke(ctx, stored.ID, s.now())
+	// เพิกถอนไม่โดนสักแถว = มีคนชิงทำไปแล้ว (logout ซ้ำ หรือ refresh หมุนไปก่อน)
+	// ปลายทางเหมือนกันคือ session นี้ตายแล้ว นับว่าสำเร็จ ไม่ต้องคืน error ให้ client งง
+	if err := s.refresh.Revoke(ctx, stored.ID, s.now()); err != nil &&
+		!errors.Is(err, apperr.ErrInvalidRefresh) {
+		return err
+	}
+
+	return nil
 }
 
 func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User, error) {

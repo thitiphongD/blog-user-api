@@ -106,6 +106,12 @@ func newEcho(cfg *config.Config, db *gorm.DB, pinger handler.Pinger) *echo.Echo 
 	e.Validator = validator.New()
 	e.HTTPErrorHandler = response.ErrorHandler
 
+	// ไม่ปักอันนี้ c.RealIP() จะอ่าน X-Forwarded-For ก่อน RemoteAddr เสมอ ซึ่งแปลว่า
+	// rate limit ที่ครอบ login/register หนีได้ด้วยการสุ่ม header ใหม่ทุก request
+	// และ remote_ip ใน access log ก็ปลอมได้ตามใจ — ไม่มี proxy อยู่หน้า service นี้
+	// วันไหนมีค่อยเปลี่ยนเป็น ExtractIPFromXFFHeader พร้อมระบุ range ที่เชื่อถือได้
+	e.IPExtractor = echo.ExtractIPDirect()
+
 	// Echo ไม่ตั้ง timeout ให้ ไม่ตั้งเองคือเปิดรับ slowloris
 	e.Server.ReadTimeout = cfg.Server.ReadTimeout
 	e.Server.WriteTimeout = cfg.Server.WriteTimeout

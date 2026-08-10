@@ -326,3 +326,60 @@ func TestRefreshReusePropagatesRevokeAllError(t *testing.T) {
 		t.Fatalf("อยากได้ errRepo ได้ %v", err)
 	}
 }
+
+// สองคำขอที่ถือ refresh token ใบเดียวกันยิงพร้อมกัน ตัวที่แพ้ต้องไม่ได้ token ใหม่
+// (repository ตีกลับมาว่าเพิกถอนไม่โดนสักแถว = มีคนชิงหมุนไปก่อนแล้ว)
+func TestRefreshLosingRaceIssuesNothing(t *testing.T) {
+	userID := uuid.New()
+	raw := "contested-token"
+	stored := storedToken(userID, raw, time.Now().Add(time.Hour))
+
+	issued := false
+
+	users := &mockUserRepo{
+		findByID: func(context.Context, uuid.UUID) (*model.User, error) {
+			return &model.User{ID: userID}, nil
+		},
+	}
+	refresh := &mockRefreshRepo{
+		findByHash: func(context.Context, string) (*model.RefreshToken, error) { return stored, nil },
+		// อีกคำขอชิงเพิกถอนไปแล้วระหว่างที่เราอ่านเสร็จแต่ยังไม่เข้า transaction
+		revoke: func(context.Context, uuid.UUID, time.Time) error {
+			return apperr.ErrInvalidRefresh
+		},
+		create: func(context.Context, *model.RefreshToken) error {
+			issued = true
+
+			return nil
+		},
+		// ไม่เซ็ต revokeAllForUser → ตัวที่แพ้ race ห้ามไปตัด session ของคนอื่นทิ้ง
+	}
+
+	result, err := newAuthService(users, refresh).Refresh(context.Background(), raw)
+
+	if !errors.Is(err, apperr.ErrInvalidRefresh) {
+		t.Fatalf("อยากได้ ErrInvalidRefresh ได้ %v", err)
+	}
+	if result != nil {
+		t.Fatal("แพ้ race แล้วยังคืน token ชุดใหม่ — ใบเดียวแตกเป็นสองสาย")
+	}
+	if issued {
+		t.Fatal("แพ้ race แล้วยังเขียน refresh token ใบใหม่ลง DB")
+	}
+}
+
+// logout ซ้ำต้องผ่าน — session ตายไปแล้วเหมือนกัน ไม่ควรเด้ง error ใส่ client
+func TestLogoutTwiceStillSucceeds(t *testing.T) {
+	stored := storedToken(uuid.New(), "raw", time.Now().Add(time.Hour))
+
+	refresh := &mockRefreshRepo{
+		findByHash: func(context.Context, string) (*model.RefreshToken, error) { return stored, nil },
+		revoke: func(context.Context, uuid.UUID, time.Time) error {
+			return apperr.ErrInvalidRefresh
+		},
+	}
+
+	if err := newAuthService(&mockUserRepo{}, refresh).Logout(context.Background(), "raw"); err != nil {
+		t.Fatalf("logout ซ้ำไม่ควรพัง ได้: %v", err)
+	}
+}
