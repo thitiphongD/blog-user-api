@@ -1,0 +1,85 @@
+// schema ของ DB อยู่ที่นี่ที่เดียว — แก้ตรงนี้แล้วสั่ง make prisma-diff NAME=xxx
+//
+// Prisma ในโปรเจกต์นี้ทำหน้าที่เดียวคือ gen SQL ออกมาให้ ไม่มี prisma client
+// ไม่มีตาราง _prisma_migrations และไม่มี Node ใน image ที่ deploy จริง
+// คนรัน migration ยังเป็น golang-migrate ที่อ่าน SQL ที่ฝังมากับ binary เหมือนเดิม
+//
+// สิ่งที่ Prisma เขียนไม่ได้ (partial index) อยู่ใน prisma/extras.sql
+// ตัว gen จะต่อท้ายไฟล์นั้นให้เองทุกครั้ง
+
+// url ไม่ได้อยู่ตรงนี้ Prisma 7 ย้ายไปอยู่ prisma.config.ts แล้ว
+datasource db {
+  provider = "postgresql"
+}
+
+// ไม่มี @default() สักตัวตั้งใจ — id/created_at/updated_at ฝั่ง Go เป็นคนใส่
+// (BeforeCreate กับ GORM) ถ้าใส่ default ที่ DB ด้วยจะกลายเป็นสองที่ที่ต้องตรงกัน
+
+model User {
+  id        String   @id @db.Uuid
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(6)
+
+  blogs         Blog[]
+  comments      Comment[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+// index ของ blogs เป็น partial ทั้งคู่ อยู่ใน extras.sql
+model Blog {
+  id        String    @id @db.Uuid
+  title     String
+  content   String
+  userId    String    @map("user_id") @db.Uuid
+  createdAt DateTime  @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // RESTRICT — คนเขียนเป็นส่วนหนึ่งของเนื้อหา ลบ user ทิ้งเฉยๆ ไม่ได้
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  comments Comment[]
+
+  @@map("blogs")
+}
+
+model RefreshToken {
+  id String @id @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  // เก็บ hash ไม่เก็บ token ดิบ — DB หลุดแล้วต้องเอาไป login ต่อไม่ได้
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @map("created_at") @db.Timestamptz(6)
+
+  // CASCADE ต่างจาก blogs ที่เป็น RESTRICT ตั้งใจ — ลบ user แล้ว session ต้องตายตาม
+  // ไม่ใช่ค้างเป็น token ที่ยังใช้ได้แต่ไม่มีเจ้าของ
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  // ใช้ตอนจับ reuse แล้วต้องเพิกถอนทั้งหมดของ user คนนั้น — ไม่ partial เพราะ
+  // refresh_tokens ไม่มี soft delete Prisma เลยเขียนเองได้
+  @@index([userId], map: "idx_refresh_tokens_user_id")
+  @@map("refresh_tokens")
+}
+
+// index ของ comments เป็น partial ทั้งคู่ อยู่ใน extras.sql
+model Comment {
+  id        String    @id @db.Uuid
+  content   String
+  blogId    String    @map("blog_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  createdAt DateTime  @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // ลบ blog แบบถาวรเมื่อไหร่ comment ต้องหายตาม ไม่มีเหตุผลให้ค้างอยู่โดยไม่มีโพสต์
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@map("comments")
+}

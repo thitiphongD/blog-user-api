@@ -1,0 +1,20 @@
+# Dockerfile ใช้ COPY . . ทั้งก้อน — ของที่ไม่ได้ใช้ตอน build ต้องกันไว้ตรงนี้
+# ตัวหนักสุดคือ node_modules ของ prisma ซึ่งเป็นเครื่องมือฝั่ง dev ล้วน
+# ตัว migration ที่ prisma gen ออกมาเป็น .sql ที่ฝังเข้า binary ไปแล้วตั้งแต่ตอน build
+node_modules/
+prisma/
+prisma.config.ts
+package.json
+package-lock.json
+
+.git/
+.github/
+.claude/
+
+bin/
+tmp/
+.swagcheck/
+
+.env
+postman/
+*.md

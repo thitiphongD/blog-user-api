@@ -5,11 +5,11 @@
 REST API สำหรับ blog — สมัคร/ล็อกอิน เขียน blog เขียนคอมเมนต์
 โพสต์อ่านได้ทุกคน แก้ได้เฉพาะเจ้าของ
 
-Go + Echo + GORM + PostgreSQL
+Go + Echo + GORM + PostgreSQL — schema ของ DB จัดการด้วย Prisma
 
 ## เริ่มยังไง
 
-ต้องมี **Docker** กับ **Go 1.25+**
+ต้องมี **Docker** กับ **Go 1.25+** (Node ต้องมีเฉพาะตอนจะแก้ schema ของ DB)
 
 ```bash
 git clone https://github.com/thitiphongD/blog-user-api.git
@@ -88,11 +88,28 @@ base path `/api/v1` — `*` = ต้องแนบ `Authorization: Bearer <toke
 | `make logs` / `make ps` / `make psql` | ดู log / สถานะ / เข้า psql |
 | `make dev` | รันบนเครื่องแบบ hot reload |
 | `make test` / `make cover` | เทสต์ |
+| `make prisma-diff NAME=x` | แก้ `schema.prisma` แล้ว gen migration ใบใหม่ (ต้องมี Node) |
 | `make smoke` | ยิง Postman collection ทั้งชุด |
 | `make ci` | รันทุกอย่างที่ CI รัน — ผ่านอันนี้ก่อนค่อย push |
 
 รันบนเครื่องแทน docker ก็ได้ (`make dev`) แค่ต้องมี postgres อยู่ก่อน — `make up` แล้ว
 `docker compose stop api` ก็ได้ postgres เปล่าๆ ไว้ใช้
+
+## แก้ schema ของ DB
+
+schema เขียนไว้ที่ `prisma/schema.prisma` ที่เดียว แก้เสร็จแล้ว:
+
+```bash
+make prisma-diff NAME=add_blog_tags   # gen migration ใบใหม่จากส่วนต่าง
+```
+
+Prisma ทำหน้าที่ **แปลง schema เป็น SQL อย่างเดียว** ตัวที่รัน migration จริงยังเป็น
+golang-migrate ที่อ่าน SQL ฝังใน binary เหมือนเดิม — ไม่มี prisma client ในโค้ด
+และ image ที่ deploy ยังเป็น Go binary ล้วน ไม่มี Node
+
+**อ่าน SQL ที่ gen ออกมาก่อน commit ทุกครั้ง** — Prisma ไม่รู้จัก partial index กับตาราง
+`schema_migrations` ของ golang-migrate เหตุผลและกับดักที่เจอมาแล้วอยู่ใน
+[ARCHITECTURE.md](ARCHITECTURE.md#migration)
 
 ## Config
 

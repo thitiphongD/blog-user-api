@@ -5,3 +5,6 @@ PLAN.md
 tmp/
 bin/
 .swagcheck/
+
+# prisma เป็นเครื่องมือ dev — package-lock.json commit ไว้เพื่อปักเวอร์ชัน แต่ของที่โหลดมาไม่ต้อง
+node_modules/

@@ -1,0 +1,8 @@
+{
+  "name": "blog-user-api-schema",
+  "private": true,
+  "description": "Prisma อยู่ในโปรเจกต์นี้เพื่อ gen SQL migration อย่างเดียว — ตัว API เป็น Go ล้วน ไม่มี Node ตอน runtime",
+  "devDependencies": {
+    "prisma": "7.9.1"
+  }
+}

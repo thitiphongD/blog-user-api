@@ -24,7 +24,8 @@ PostgreSQL
 - Service ผูกกับ **interface** ของ repository ไม่ผูกกับ struct → mock ได้ ทดสอบไม่ต้องต่อ DB
 - **Error ของ GORM ห้ามทะลุขึ้น service** — repo แปลงเป็น domain error ใน `internal/apperr` ก่อนคืน
 - **Model ห้ามหลุดออก response** ต้อง map เป็น DTO เสมอ (กัน password hash หลุด)
-- Schema มี source of truth เดียวคือไฟล์ SQL ใน `internal/migrate/migrations/` — **GORM ห้าม `AutoMigrate`**
+- Schema มี source of truth เดียวคือ `prisma/schema.prisma` → gen เป็น SQL ลง
+  `internal/migrate/migrations/` — **GORM ห้าม `AutoMigrate`**
 - JSON กับ DB column เป็น `snake_case` ทั้งระบบ
 - UUID กับ timestamp เซ็ตฝั่ง app (`uuid.New()` + GORM autoCreateTime) ไม่ใช้ DB default
 
@@ -35,7 +36,8 @@ PostgreSQL
 | Go 1.25 | ภาษา |
 | Echo v4 | HTTP framework |
 | GORM | query (ไม่ใช้ทำ migration) |
-| golang-migrate | migration, embed ไว้ใน binary |
+| golang-migrate | รัน migration, embed ไว้ใน binary |
+| Prisma 7 | gen SQL migration จาก `schema.prisma` (เครื่องมือ dev ไม่ติดไปกับ image) |
 | PostgreSQL 16 | database |
 | golang-jwt | auth token |
 | bcrypt | hash password (cost 12) |
@@ -53,7 +55,7 @@ internal/
   database/                 ต่อ postgres + retry ตอน boot
   apperr/                   domain error (ErrNotFound, ErrEmailTaken, ...)
   migrate/                  รัน migration ตอน start
-    migrations/             ไฟล์ SQL — source of truth ของ schema
+    migrations/             ไฟล์ SQL ที่ Prisma gen ให้ — ตัวที่รันจริง
   handler/                  auth / blog / comment / user / health
   logging/                  พา request_id ไปกับ context.Context
   service/                  business logic
@@ -68,6 +70,11 @@ internal/
   response/                 envelope กลาง + global error handler
 
 docs/                       swagger
+
+prisma/
+  schema.prisma             source of truth ของ schema
+  extras.sql                SQL ที่ Prisma เขียนไม่ได้ (partial index)
+prisma.config.ts            datasource + external table ของ Prisma 7
 ```
 
 migrations อยู่ใต้ `internal/migrate/` เพราะ `//go:embed` ห้ามมี `..` — embed ไฟล์นอก
@@ -108,15 +115,47 @@ image สุดท้าย ~50MB รันด้วย user `app` (uid 10001) �
 
 Migration ถูก embed อยู่ใน binary และ **รันอัตโนมัติตอน app start** ปกติไม่ต้องสั่งเอง
 
-เวลาจะเพิ่มตารางใหม่:
+schema เขียนไว้ที่ `prisma/schema.prisma` แล้วให้ Prisma แปลงเป็น SQL ให้:
 
-```bash
-make migrate-create NAME=create_comments
+```
+prisma/schema.prisma  ← แก้ตรงนี้ที่เดียว
+      │
+      │ make prisma-diff NAME=add_tags
+      ▼
+internal/migrate/migrations/*.sql
+      │
+      │ //go:embed
+      ▼
+   app start → migrate.Up()
 ```
 
-สั่งเองเมื่อจำเป็น: `make migrate-up` / `make migrate-down` / `make migrate-version`
+Prisma ในโปรเจกต์นี้เป็น **ตัว gen SQL อย่างเดียว** — ไม่มี prisma client ไม่มีตาราง
+`_prisma_migrations` และไม่มี Node ใน image ที่ deploy จริง (`.dockerignore` กัน `node_modules/`
+กับ `prisma/` ออกจาก build context) คนรัน migration ยังเป็น golang-migrate เหมือนเดิม
 
-แก้ไฟล์ migration ที่รันไปแล้วห้ามทำ — สร้างไฟล์ใหม่เสมอ
+| คำสั่ง | ทำอะไร |
+|---|---|
+| `make prisma-diff NAME=x` | diff DB จริงกับ `schema.prisma` แล้ว gen migration ใบถัดไป |
+| `make prisma-init` | gen ใหม่ทั้งหมดจากศูนย์ ล้าง `migrations/` ทิ้ง — ใช้ตอนตั้งต้นเท่านั้น |
+| `make prisma-validate` / `make prisma-format` | เช็ค/จัดฟอร์แมต `schema.prisma` |
+| `make migrate-up` / `migrate-down` / `migrate-version` | สั่ง golang-migrate ตรงๆ |
+| `make migrate-create NAME=x` | migration เปล่าไว้เขียน SQL มือ (เช่น backfill ข้อมูล) |
+
+**สามอย่างที่ Prisma ทำให้ไม่ได้ ต้องรู้ไว้:**
+
+1. **partial index** (`CREATE INDEX ... WHERE deleted_at IS NULL`) — ไม่มีไวยากรณ์รองรับ
+   ของพวกนี้เลยอยู่ที่ `prisma/extras.sql` แล้วตัว gen ต่อท้าย migration ทุกใบให้
+   (เป็น `IF NOT EXISTS` ใบที่ไม่ได้แตะ index เลยไม่พัง) จะแก้ definition ของ index เดิม
+   ต้องเขียน `DROP INDEX` ในไฟล์ migration เอง
+2. **`schema_migrations`** คือสมุดจดของ golang-migrate ที่ Prisma ไม่รู้จัก ถ้าไม่ประกาศเป็น
+   external table ใน `prisma.config.ts` มันจะ gen `DROP TABLE schema_migrations` ออกมาให้ —
+   ประกาศไว้แล้ว แต่นี่คือเหตุผลว่าทำไมต้องอ่าน SQL ที่ gen ออกมาก่อน commit ทุกครั้ง
+3. `UNIQUE` ที่ Prisma ออกให้เป็น **unique index** ไม่ใช่ unique constraint (บังคับความ unique
+   ได้เท่ากัน แต่ชื่อใน catalog คนละชนิด) และ `@db.Timestamptz(6)` จะเขียน typmod ลงไปตรงๆ
+   ต่างจาก `TIMESTAMPTZ` เปล่าๆ ที่เขียนมือ — พฤติกรรมเท่ากันเพราะ default ของ postgres คือ 6
+
+แก้ไฟล์ migration ที่รันไปแล้วห้ามทำ — สร้างไฟล์ใหม่เสมอ (`make prisma-init` ล้างทิ้งหมด
+ใช้ได้เฉพาะตอนที่ยังไม่มี DB ไหนวิ่งอยู่จริง)
 
 ## API
 
